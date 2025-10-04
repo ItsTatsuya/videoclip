@@ -472,7 +472,10 @@ function pref_menu:save()
             end
         end
         handle:close()
-        h.notify("Settings saved.", "info", 2)
+        -- Re-validate and apply the config after saving
+        validate_config()
+        encoder.init(config, main_menu.timings)
+        h.notify("Settings saved and applied!", "info", 2)
     else
         h.notify_error(string.format("Couldn't open %s.", config_filepath), "error", 4)
     end
