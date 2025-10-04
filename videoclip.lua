@@ -39,13 +39,13 @@ local config = {
     audio_folder_path = p.default_audio_folder,
     -- The range of the CRF scale is 0–51, where 0 is lossless,
     -- 23 is the default, and 51 is worst quality possible.
-    -- Insane values like 9999 still work but produce the worst quality.
-    video_quality = 23,
-    -- Use the slowest preset that you have patience for.
-    -- https://trac.ffmpeg.org/wiki/Encode/H.264
-    preset = 'faster',
+    -- For NVENC, recommended CRF range is 15-25 for good quality
+    video_quality = 20,
+    -- NVENC presets: p1 (fastest) to p7 (slowest/best quality)
+    -- p4 = balanced quality/speed, p5 = good quality
+    preset = 'p5',
     video_format = 'mp4', -- mp4, vp9, vp8
-    video_bitrate = '1M',
+    video_bitrate = '2M', -- Slightly higher bitrate for better quality with smaller size
     video_width = -2,
     video_height = 480,
     video_fps = 'auto',
@@ -72,6 +72,7 @@ local main_menu
 local pref_menu
 
 local allowed_presets = {
+    -- CPU presets (libx264)
     ultrafast = true,
     superfast = true,
     veryfast = true,
@@ -81,6 +82,14 @@ local allowed_presets = {
     slow = true,
     slower = true,
     veryslow = true,
+    -- NVENC presets
+    p1 = true,
+    p2 = true,
+    p3 = true,
+    p4 = true,
+    p5 = true,
+    p6 = true,
+    p7 = true,
 }
 
 ------------------------------------------------------------
@@ -100,7 +109,8 @@ end
 
 local function set_encoding_settings()
     if config.video_format == 'mp4' then
-        config.video_codec = 'libx264'
+        -- Use NVENC hardware acceleration for H.264
+        config.video_codec = 'h264_nvenc'
         config.video_extension = '.mp4'
     elseif config.video_format == 'vp9' then
         config.video_codec = 'libvpx-vp9'
@@ -129,7 +139,8 @@ local function validate_config()
     end
 
     if not allowed_presets[config.preset] then
-        config.preset = 'faster'
+        -- Default to NVENC preset p5 for good quality/speed balance
+        config.preset = 'p5'
     end
 
     set_encoding_settings()

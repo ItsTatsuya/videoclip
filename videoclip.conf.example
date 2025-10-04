@@ -1,0 +1,73 @@
+# videoclip.conf - NVENC GPU Acceleration Configuration
+# Place this file in: mpv/script-opts/videoclip.conf
+
+# Video paths (use absolute paths, ~ does NOT work)
+video_folder_path=C:/Users/YourUsername/Videos/mpv-clips
+audio_folder_path=C:/Users/YourUsername/Music/mpv-clips
+
+# Video Quality Settings (NVENC Optimized)
+# CRF: 15-25 for NVENC (lower = better quality, larger file)
+video_quality=20
+
+# NVENC Presets: p1 (fastest) to p7 (slowest/best quality)
+# p5 = balanced quality and speed (recommended)
+preset=p5
+
+# Video format: mp4 (uses h264_nvenc), vp9, vp8
+video_format=mp4
+
+# Bitrate: Adjust for quality/size balance
+# 1M = ~1 Mbps (smaller files)
+# 2M = ~2 Mbps (balanced - recommended)
+# 3M = ~3 Mbps (better quality)
+video_bitrate=2M
+
+# Resolution (-2 = auto maintain aspect ratio)
+video_width=-2
+video_height=480
+
+# FPS: 'auto' or specific value like 30, 60
+video_fps=auto
+
+# Audio Settings
+audio_format=opus
+audio_bitrate=32k
+
+# Subtitle Settings
+sub_font=Noto Sans CJK JP
+
+# OSD Settings
+font_size=24
+osd_align=7
+osd_outline=1.5
+
+# Filename Settings
+clean_filename=yes
+filename_template=%n_%s-%e
+
+# Catbox/Litterbox Upload Settings
+litterbox=yes
+litterbox_expire=72h
+
+# ===== QUALITY PRESETS =====
+# Uncomment one of these preset groups to use:
+
+# --- High Quality, Medium Size ---
+#video_quality=18
+#preset=p6
+#video_bitrate=3M
+
+# --- Balanced (Default) ---
+#video_quality=20
+#preset=p5
+#video_bitrate=2M
+
+# --- Smaller Size, Good Quality ---
+#video_quality=23
+#preset=p4
+#video_bitrate=1.5M
+
+# --- Very Small Size ---
+#video_quality=26
+#preset=p4
+#video_bitrate=1M

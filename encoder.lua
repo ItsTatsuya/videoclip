@@ -91,6 +91,8 @@ this.mk_out_path_video = function(clip_filename_noext)
 end
 
 this.mkargs_video = function(out_clip_path)
+    local is_nvenc = this.config.video_codec == 'h264_nvenc' or this.config.video_codec == 'hevc_nvenc'
+
     local args = {
         this.player,
         mp.get_property('path'),
@@ -113,10 +115,7 @@ this.mkargs_video = function(out_clip_path)
         table.concat { '--aid=', mp.get_property("aid") }, -- track number
         table.concat { '--mute=', mp.get_property("mute") },
         table.concat { '--volume=', mp.get_property('volume') },
-        table.concat { '--ovcopts-add=b=', this.config.video_bitrate },
         table.concat { '--oacopts-add=b=', this.config.audio_bitrate },
-        table.concat { '--ovcopts-add=crf=', this.config.video_quality },
-        table.concat { '--ovcopts-add=preset=', this.config.preset },
         table.concat { '--vf-add=scale=', this.config.video_width, ':', this.config.video_height },
         table.concat { '--ytdl-format=', mp.get_property("ytdl-format") },
         table.concat { '--o=', out_clip_path },
@@ -128,6 +127,24 @@ this.mkargs_video = function(out_clip_path)
         table.concat { '--sub-back-color=', mp.get_property("sub-back-color") },
         table.concat { '--sub-border-style=', mp.get_property("sub-border-style") },
     }
+
+    if is_nvenc then
+        -- NVENC-specific options for high quality and small file size
+        table.insert(args, #args, table.concat { '--ovcopts-add=rc=vbr' }) -- Variable bitrate mode
+        table.insert(args, #args, table.concat { '--ovcopts-add=cq=', this.config.video_quality }) -- CQ (constant quality) for NVENC
+        table.insert(args, #args, table.concat { '--ovcopts-add=preset=', this.config.preset }) -- NVENC preset (p1-p7)
+        table.insert(args, #args, table.concat { '--ovcopts-add=b=', this.config.video_bitrate }) -- Target bitrate
+        table.insert(args, #args, '--ovcopts-add=spatial_aq=1') -- Spatial AQ for better quality
+        table.insert(args, #args, '--ovcopts-add=temporal_aq=1') -- Temporal AQ for better quality
+        table.insert(args, #args, '--ovcopts-add=rc-lookahead=32') -- Lookahead frames for better encoding decisions
+        table.insert(args, #args, '--ovcopts-add=b_ref_mode=middle') -- Use middle frame as reference for B-frames
+        table.insert(args, #args, '--ovcopts-add=multipass=qres') -- Quarter-resolution multipass encoding
+    else
+        -- CPU codec options (libx264, libvpx, etc.)
+        table.insert(args, #args, table.concat { '--ovcopts-add=b=', this.config.video_bitrate })
+        table.insert(args, #args, table.concat { '--ovcopts-add=crf=', this.config.video_quality })
+        table.insert(args, #args, table.concat { '--ovcopts-add=preset=', this.config.preset })
+    end
 
     if this.config.video_fps ~= 'auto' then
         table.insert(args, #args, table.concat { '--vf-add=fps=', this.config.video_fps })
