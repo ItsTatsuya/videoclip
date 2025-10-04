@@ -49,7 +49,7 @@ local config = {
     video_width = -2,
     video_height = 480,
     video_fps = 'auto',
-    audio_format = 'opus', -- aac, opus
+    audio_format = 'opus', -- aac, opus, mp3, ogg
     audio_bitrate = '32k', -- 32k, 64k, 128k, 256k. aac requires higher bitrates.
     font_size = 24,
     osd_align = 7, -- https://aegisub.org/docs/3.2/ASS_Tags/#\an
@@ -123,6 +123,12 @@ local function set_encoding_settings()
     if config.audio_format == 'aac' then
         config.audio_codec = 'aac'
         config.audio_extension = '.aac'
+    elseif config.audio_format == 'mp3' then
+        config.audio_codec = 'libmp3lame'
+        config.audio_extension = '.mp3'
+    elseif config.audio_format == 'ogg' then
+        config.audio_codec = 'libvorbis'
+        config.audio_extension = '.ogg'
     else
         config.audio_codec = 'libopus'
         config.audio_extension = '.opus'
@@ -341,7 +347,7 @@ pref_menu.audio_bitrates = {
 }
 
 pref_menu.vid_formats = { 'mp4', 'vp9', 'vp8', }
-pref_menu.aud_formats = { 'aac', 'opus', }
+pref_menu.aud_formats = { 'aac', 'opus', 'mp3', 'ogg', }
 pref_menu.litterbox_expirations = { '1h', '12h', '24h', '72h', }
 
 function pref_menu:get_selected_resolution()
