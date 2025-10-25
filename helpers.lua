@@ -138,4 +138,48 @@ this.query_user_home_dir = function()
     return os.getenv("HOME") or os.getenv("USERPROFILE")
 end
 
+this.clean_forbidden_characters = function(title)
+    return title:gsub('[<>:"/\\|%?%*]+', '.')
+end
+
+this.truncate_utf8_bytes = function(s, max_bytes)
+    local size = #s
+    local idx = 1
+
+    if size <= max_bytes then
+        return s
+    end
+
+    while idx <= size do
+        local b = s:byte(idx)
+        local char_len = 1
+        if not b then
+            break
+        end
+
+        if b <= 0x7F then
+            char_len = 1
+        elseif b >= 0xC2 and b <= 0xDF then
+            char_len = 2
+        elseif b >= 0xE0 and b <= 0xEF then
+            char_len = 3
+        elseif b >= 0xF0 and b <= 0xF4 then
+            char_len = 4
+        else
+            break
+        end
+
+        if idx-1 + char_len > max_bytes then
+            break
+        end
+
+        idx = idx + char_len
+    end
+
+    if idx <= 1 then
+        return "new_file"
+    end
+    return s:sub(1, idx-1)
+end
+
 return this
