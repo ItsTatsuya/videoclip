@@ -13,8 +13,8 @@ Subtitles can be embedded into the clips.
 
 ## Prerequisites
 
-1) [Install mpv](https://mpv.io/installation/).
-2) Add the directory where `mpv` is installed
+1. [Install mpv](https://mpv.io/installation/).
+2. Add the directory where `mpv` is installed
    to the [PATH](https://www.mojeek.com/search?q=path+variable).
 
    If you're using GNU/Linux, this step is likely unnecessary
@@ -31,13 +31,13 @@ Subtitles can be embedded into the clips.
 Clone the repository to the `mpv/scripts` directory.
 The command below works on the GNU operating system with `git` installed.
 
-``` bash
+```bash
 git clone 'https://github.com/Ajatt-Tools/videoclip.git' ~/.config/mpv/scripts/videoclip
 ```
 
 To update the user-script on demand later, you can execute:
 
-``` bash
+```bash
 cd ~/.config/mpv/scripts/videoclip && git pull
 ```
 
@@ -49,10 +49,10 @@ and extract the folder containing
 `videoclip.lua`
 to your [mpv scripts](https://github.com/mpv-player/mpv/wiki/User-Scripts) directory:
 
-| OS | Location |
-| --- | --- |
-| GNU/Linux | `~/.config/mpv/scripts/` |
-| Windows | `C:/Users/Username/AppData/Roaming/mpv/scripts/` |
+| OS        | Location                                         |
+| --------- | ------------------------------------------------ |
+| GNU/Linux | `~/.config/mpv/scripts/`                         |
+| Windows   | `C:/Users/Username/AppData/Roaming/mpv/scripts/` |
 
 Note: in [Celluloid](https://www.archlinux.org/packages/community/x86_64/celluloid/)
 user scripts are installed by switching to the "Plugins" tab
@@ -78,10 +78,10 @@ in the preferences dialog and dropping the files there.
 
 The config file should be created by the user, if needed.
 
-| OS | Config location |
-| --- | --- |
-| GNU/Linux | `~/.config/mpv/script-opts/videoclip.conf` |
-| Windows | `C:/Users/Username/AppData/Roaming/mpv/script-opts/videoclip.conf` |
+| OS        | Config location                                                    |
+| --------- | ------------------------------------------------------------------ |
+| GNU/Linux | `~/.config/mpv/script-opts/videoclip.conf`                         |
+| Windows   | `C:/Users/Username/AppData/Roaming/mpv/script-opts/videoclip.conf` |
 
 If a parameter is not specified in the config file, the default value will be used.
 mpv doesn't tolerate spaces before and after `=`.
@@ -122,10 +122,12 @@ video_fps=auto
 #video_fps=60
 
 # Audio settings
-# Available formats: opus or aac
-audio_format=opus
-# Opus sounds good at low bitrates 32-64k, but aac requires 128-256k.
-audio_bitrate=32k
+# Available formats: aac, opus, mp3, ogg
+# IMPORTANT: For MP4 format, use 'aac' or 'mp3' for iOS/Safari compatibility!
+# iOS devices cannot play MP4 files with opus/ogg audio codecs.
+audio_format=aac
+# AAC requires higher bitrates (128-256k), while Opus sounds good at 32-64k.
+audio_bitrate=128k
 
 # Catbox.moe upload settings
 # Whether uploads should go to litterbox instead of catbox.
@@ -146,10 +148,10 @@ filename_template=%n_%s-%e
 
 ### Key bindings
 
-| OS | Config location |
-| --- | --- |
-| GNU/Linux | `~/.config/mpv/input.conf` |
-| Windows | `C:/Users/Username/AppData/Roaming/mpv/input.conf` |
+| OS        | Config location                                    |
+| --------- | -------------------------------------------------- |
+| GNU/Linux | `~/.config/mpv/input.conf`                         |
+| Windows   | `C:/Users/Username/AppData/Roaming/mpv/input.conf` |
 
 Add this line if you want to change the key that opens the script's menu.
 
@@ -161,7 +163,7 @@ c script-binding videoclip-menu-open
 
 - Open a file in mpv and press `c` to open the script menu.
 - Follow the onscreen instructions. You need to set the `start point`,
-`end point`, and then press `c` to create the clip.
+  `end point`, and then press `c` to create the clip.
 
 It is possible to create silent videoclips.
 To do that, first mute audio in mpv.

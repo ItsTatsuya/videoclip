@@ -30,8 +30,14 @@ video_height=480
 video_fps=auto
 
 # Audio Settings
-audio_format=opus
-audio_bitrate=32k
+# IMPORTANT: For MP4 format, use 'aac' or 'mp3' for iOS/Safari compatibility!
+# iOS devices cannot play MP4 files with opus/ogg audio codecs.
+# - aac: Best for MP4, works on all devices (128k-256k recommended)
+# - opus: Best quality at low bitrates, but only for WebM format (32k-64k)
+# - mp3: Universal compatibility (128k-256k)
+# - ogg: For WebM only (64k-128k)
+audio_format=aac
+audio_bitrate=128k
 
 # Subtitle Settings
 sub_font=Noto Sans CJK JP

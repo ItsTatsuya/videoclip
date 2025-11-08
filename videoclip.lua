@@ -49,8 +49,8 @@ local config = {
     video_width = -2,
     video_height = 480,
     video_fps = 'auto',
-    audio_format = 'opus', -- aac, opus, mp3, ogg
-    audio_bitrate = '32k', -- 32k, 64k, 128k, 256k. aac requires higher bitrates.
+    audio_format = 'aac', -- aac, opus, mp3, ogg. Use 'aac' for iOS/Safari compatibility with mp4.
+    audio_bitrate = '128k', -- 32k, 64k, 128k, 256k. aac requires higher bitrates (128k+ recommended).
     font_size = 24,
     osd_align = 7, -- https://aegisub.org/docs/3.2/ASS_Tags/#\an
     osd_outline = 1.5,
@@ -112,6 +112,11 @@ local function set_encoding_settings()
         -- Use NVENC hardware acceleration for H.264
         config.video_codec = 'h264_nvenc'
         config.video_extension = '.mp4'
+        -- Force AAC audio for MP4 to ensure iOS/Safari compatibility
+        -- MP4 containers with Opus audio don't play on iOS devices
+        if config.audio_format ~= 'aac' and config.audio_format ~= 'mp3' then
+            config.audio_format = 'aac'
+        end
     elseif config.video_format == 'vp9' then
         config.video_codec = 'libvpx-vp9'
         config.video_extension = '.webm'
