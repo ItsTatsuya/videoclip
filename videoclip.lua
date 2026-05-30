@@ -69,7 +69,7 @@ local config = {
     -- Available tags: %n = filename, %t = title, %s = start, %e = end, %d = duration,
     --                 %Y = year, %M = months, %D = day, %H = hours (24), %I = hours (12),
     --                 %P = am/pm %N = minutes, %S = seconds
-    filename_template='%n_%s-%e',
+    filename_template = '%n_%s-%e',
 }
 
 mpopt.read_options(config, NAME)
@@ -204,7 +204,9 @@ local function upload_to_custom(outfile)
     local exec_args = {}
 
     for _, arg in ipairs(raw_args) do
-        local clean_arg = arg:gsub('%%f', function() return outfile end)
+        local clean_arg = arg:gsub('%%f', function()
+            return outfile
+        end)
         table.insert(exec_args, clean_arg)
     end
 
@@ -297,19 +299,45 @@ main_menu = Menu:new()
 main_menu.timings = Timings:new()
 
 main_menu.keybindings = {
-    { key = 's', fn = function() main_menu:set_time('start') end },
-    { key = 'e', fn = function() main_menu:set_time('end') end },
-    { key = 'S', fn = function() main_menu:set_time_sub('start') end },
-    { key = 'E', fn = function() main_menu:set_time_sub('end') end },
-    { key = 'r', fn = function() main_menu:reset_timings() end },
-    { key = 'c', fn = function() main_menu:create_clip('video') end },
-    { key = 'C', fn = function() force_resolution(1920, -2, encoder.create_clip, 'video') end },
-    { key = 'a', fn = function() main_menu:create_clip('audio') end },
-    { key = 'x', fn = function() main_menu:create_clip('video', upload_video) end },
-    { key = 'X', fn = function() force_resolution(1920, -2, main_menu.create_clip, 'video', upload_video) end },
-    { key = 'p', fn = function() pref_menu:open() end },
-    { key = 'o', fn = function() p.open('https://streamable.com/') end },
-    { key = 'ESC', fn = function() main_menu:close() end },
+    { key = 's', fn = function()
+        main_menu:set_time('start')
+    end },
+    { key = 'e', fn = function()
+        main_menu:set_time('end')
+    end },
+    { key = 'S', fn = function()
+        main_menu:set_time_sub('start')
+    end },
+    { key = 'E', fn = function()
+        main_menu:set_time_sub('end')
+    end },
+    { key = 'r', fn = function()
+        main_menu:reset_timings()
+    end },
+    { key = 'c', fn = function()
+        main_menu:create_clip('video')
+    end },
+    { key = 'C', fn = function()
+        force_resolution(1920, -2, encoder.create_clip, 'video')
+    end },
+    { key = 'a', fn = function()
+        main_menu:create_clip('audio')
+    end },
+    { key = 'x', fn = function()
+        main_menu:create_clip('video', upload_video)
+    end },
+    { key = 'X', fn = function()
+        force_resolution(1920, -2, main_menu.create_clip, 'video', upload_video)
+    end },
+    { key = 'p', fn = function()
+        pref_menu:open()
+    end },
+    { key = 'o', fn = function()
+        p.open('https://streamable.com/')
+    end },
+    { key = 'ESC', fn = function()
+        main_menu:close()
+    end },
 }
 
 function main_menu:set_time(property)
@@ -372,18 +400,44 @@ end
 pref_menu = Menu:new(main_menu)
 
 pref_menu.keybindings = {
-    { key = 'f', fn = function() pref_menu:cycle_video_formats() end },
-    { key = 'a', fn = function() pref_menu:cycle_audio_formats() end },
-    { key = 'm', fn = function() pref_menu:toggle_mute_audio() end },
-    { key = 'r', fn = function() pref_menu:cycle_resolutions() end },
-    { key = 'b', fn = function() pref_menu:cycle_audio_bitrates() end },
-    { key = 'e', fn = function() pref_menu:toggle_embed_subtitles() end },
-    { key = 'x', fn = function() pref_menu:toggle_catbox() end },
-    { key = 'z', fn = function() pref_menu:cycle_litterbox_expiration() end },
-    { key = 's', fn = function() pref_menu:save() end },
-    { key = 'c', fn = function() end },
-    { key = 'ESC', fn = function() pref_menu:close() end },
-    { key = 'q', fn = function() pref_menu:close() end },
+    { key = 'f', fn = function()
+        pref_menu:cycle_video_formats()
+    end },
+    { key = 'a', fn = function()
+        pref_menu:cycle_audio_formats()
+    end },
+    { key = 'm', fn = function()
+        pref_menu:toggle_mute_audio()
+    end },
+    { key = 'r', fn = function()
+        pref_menu:cycle_resolutions()
+    end },
+    { key = 'b', fn = function()
+        pref_menu:cycle_video_bitrates()
+    end },
+    { key = 'B', fn = function()
+        pref_menu:cycle_audio_bitrates()
+    end },
+    { key = 'e', fn = function()
+        pref_menu:toggle_embed_subtitles()
+    end },
+    { key = 'x', fn = function()
+        pref_menu:toggle_catbox()
+    end },
+    { key = 'z', fn = function()
+        pref_menu:cycle_litterbox_expiration()
+    end },
+    { key = 's', fn = function()
+        pref_menu:save()
+    end },
+    { key = 'c', fn = function()
+    end },
+    { key = 'ESC', fn = function()
+        pref_menu:close()
+    end },
+    { key = 'q', fn = function()
+        pref_menu:close()
+    end },
 }
 
 pref_menu.resolutions = {
