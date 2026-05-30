@@ -462,6 +462,16 @@ pref_menu.audio_bitrates = {
     '384k',
     selected = 1,
 }
+pref_menu.video_bitrates = {
+    config.video_bitrate,
+    '500k',
+    '1M',
+    '2M',
+    '4M',
+    '8M',
+    '16M',
+    selected = 1,
+}
 
 pref_menu.vid_formats = { 'mp4', 'vp9', 'vp8', }
 pref_menu.aud_formats = { 'aac', 'opus', }
@@ -483,10 +493,21 @@ function pref_menu:cycle_resolutions()
     self:update()
 end
 
-function pref_menu:cycle_audio_bitrates()
-    self.audio_bitrates.selected = self.audio_bitrates.selected + 1 > #self.audio_bitrates and 1 or self.audio_bitrates.selected + 1
-    config.audio_bitrate = self.audio_bitrates[self.audio_bitrates.selected]
+--- Cycle through a list of bitrate presets and update the corresponding config value.
+--- @param bitrates_key string key into self (e.g. 'audio_bitrates', 'video_bitrates')
+--- @param config_key string key into config (e.g. 'audio_bitrate', 'video_bitrate')
+function pref_menu:cycle_bitrates(bitrates_key, config_key)
+    self[bitrates_key].selected = self[bitrates_key].selected + 1 > #self[bitrates_key] and 1 or self[bitrates_key].selected + 1
+    config[config_key] = self[bitrates_key][self[bitrates_key].selected]
     self:update()
+end
+
+function pref_menu:cycle_audio_bitrates()
+    self:cycle_bitrates('audio_bitrates', 'audio_bitrate')
+end
+
+function pref_menu:cycle_video_bitrates()
+    self:cycle_bitrates('video_bitrates', 'video_bitrate')
 end
 
 function pref_menu:cycle_formats(config_type)
@@ -553,9 +574,10 @@ function pref_menu:update()
     local osd = OSD:new():config(config)
     osd:submenu('Preferences'):newline()
     osd:tab():item('r: Video resolution: '):append(self:get_selected_resolution()):newline()
+    osd:tab():item('b: Video bitrate: '):append(config.video_bitrate):newline()
     osd:tab():item('f: Video format: '):append(config.video_format):newline()
     osd:tab():item('a: Audio format: '):append(config.audio_format):newline()
-    osd:tab():item('b: Audio bitrate: '):append(config.audio_bitrate):newline()
+    osd:tab():item('B: Audio bitrate: '):append(config.audio_bitrate):newline()
     osd:tab():item('m: Mute audio: '):append(mp.get_property("mute")):newline()
     osd:tab():item('e: Embed subtitles: '):append(mp.get_property("sub-visibility")):newline()
     osd:submenu('Catbox'):newline()
