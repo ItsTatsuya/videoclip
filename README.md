@@ -110,13 +110,27 @@ video_height=480
 video_bitrate=1M
 # Available video formats: mp4, vp9, vp8
 video_format=mp4
+# Video encoder: cpu (libx264) or nvenc (h264_nvenc, NVIDIA GPU).
+# NVENC only applies when video_format=mp4.
+video_encoder=cpu
 # The range of the scale is 0–51, where 0 is lossless,
 # 23 is the default, and 51 is worst quality possible.
 # Insane values like 9999 still work but produce the worst quality.
+# For NVENC this maps to CQ (constant quality) in VBR mode.
 video_quality=23
-# Use the slowest preset that you have patience for.
+# Use the slowest preset that you have patience for (CPU/libx264 only).
 # https://trac.ffmpeg.org/wiki/Encode/H.264
 preset=faster
+# NVENC preset p1 (fastest) through p7 (slowest, best quality).
+nvenc_preset=p5
+# NVENC tune: hq (quality), ll (low latency), ull, lossless.
+nvenc_tune=hq
+
+# In the preferences menu (press p), set video_encoder=nvenc to enable GPU encoding.
+# With NVENC active, additional keys are available:
+#   P - cycle NVENC preset (p1-p7)
+#   T - cycle NVENC tune (hq, ll, ull, lossless)
+#   Q - cycle quality/CQ (15-35, lower = better quality)
 # FPS / framerate. Set to "auto" or a number.
 video_fps=auto
 #video_fps=60

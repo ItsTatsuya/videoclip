@@ -44,6 +44,14 @@ local config = {
     -- Use the slowest preset that you have patience for.
     -- https://trac.ffmpeg.org/wiki/Encode/H.264
     preset = 'faster',
+    -- Video encoder: cpu (libx264) or nvenc (h264_nvenc, NVIDIA GPU).
+    -- NVENC only applies when video_format=mp4.
+    video_encoder = 'cpu',
+    -- NVENC preset p1 (fastest) through p7 (slowest, best quality).
+    -- https://docs.nvidia.com/video-technologies/video-codec-sdk/12.2/nvenc-video-encoder-api-prog-guide/index.html
+    nvenc_preset = 'p5',
+    -- NVENC tune: hq (quality), ll (low latency), ull, lossless.
+    nvenc_tune = 'hq',
     video_format = 'mp4', -- mp4, vp9, vp8
     video_bitrate = '1M',
     video_width = -2,
@@ -88,6 +96,28 @@ local allowed_presets = {
     veryslow = true,
 }
 
+local allowed_nvenc_presets = {
+    p1 = true,
+    p2 = true,
+    p3 = true,
+    p4 = true,
+    p5 = true,
+    p6 = true,
+    p7 = true,
+}
+
+local allowed_nvenc_tunes = {
+    hq = true,
+    ll = true,
+    ull = true,
+    lossless = true,
+}
+
+local allowed_video_encoders = {
+    cpu = true,
+    nvenc = true,
+}
+
 ------------------------------------------------------------
 -- Utility functions
 
@@ -105,7 +135,11 @@ end
 
 local function set_encoding_settings()
     if config.video_format == 'mp4' then
-        config.video_codec = 'libx264'
+        if config.video_encoder == 'nvenc' then
+            config.video_codec = 'h264_nvenc'
+        else
+            config.video_codec = 'libx264'
+        end
         config.video_extension = '.mp4'
     elseif config.video_format == 'vp9' then
         config.video_codec = 'libvpx-vp9'
@@ -135,6 +169,23 @@ local function validate_config()
 
     if not allowed_presets[config.preset] then
         config.preset = 'faster'
+    end
+
+    if not allowed_video_encoders[config.video_encoder] then
+        config.video_encoder = 'cpu'
+    end
+
+    if not allowed_nvenc_presets[config.nvenc_preset] then
+        config.nvenc_preset = 'p5'
+    end
+
+    if not allowed_nvenc_tunes[config.nvenc_tune] then
+        config.nvenc_tune = 'hq'
+    end
+
+    -- NVENC only supports H.264; fall back to CPU for other formats.
+    if config.video_encoder == 'nvenc' and config.video_format ~= 'mp4' then
+        config.video_encoder = 'cpu'
     end
 
     set_encoding_settings()
@@ -403,6 +454,18 @@ pref_menu.keybindings = {
     { key = 'f', fn = function()
         pref_menu:cycle_video_formats()
     end },
+    { key = 'g', fn = function()
+        pref_menu:cycle_video_encoders()
+    end },
+    { key = 'P', fn = function()
+        pref_menu:cycle_nvenc_preset()
+    end },
+    { key = 'T', fn = function()
+        pref_menu:cycle_nvenc_tune()
+    end },
+    { key = 'Q', fn = function()
+        pref_menu:cycle_video_quality()
+    end },
     { key = 'a', fn = function()
         pref_menu:cycle_audio_formats()
     end },
@@ -474,8 +537,19 @@ pref_menu.video_bitrates = {
 }
 
 pref_menu.vid_formats = { 'mp4', 'vp9', 'vp8', }
+pref_menu.vid_encoders = { 'cpu', 'nvenc', }
+pref_menu.nvenc_presets = { 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', }
+pref_menu.nvenc_tunes = { 'hq', 'll', 'ull', 'lossless', }
+pref_menu.video_qualities = { 15, 18, 20, 23, 26, 28, 32, 35, selected = 1, }
 pref_menu.aud_formats = { 'aac', 'opus', }
 pref_menu.litterbox_expirations = { '1h', '12h', '24h', '72h', }
+
+for i, quality in ipairs(pref_menu.video_qualities) do
+    if config.video_quality == quality then
+        pref_menu.video_qualities.selected = i
+        break
+    end
+end
 
 function pref_menu:get_selected_resolution()
     return string.format(
@@ -534,6 +608,64 @@ function pref_menu:cycle_video_formats()
     pref_menu:cycle_formats('video_format')
 end
 
+function pref_menu:cycle_video_encoders()
+    if config.video_format ~= 'mp4' then
+        h.notify_error("NVENC is only available for mp4 (H.264).", "warn", 2)
+        return
+    end
+
+    local selected = 1
+    for i, encoder in ipairs(self.vid_encoders) do
+        if config.video_encoder == encoder then
+            selected = i
+            break
+        end
+    end
+    config.video_encoder = self.vid_encoders[selected + 1] or self.vid_encoders[1]
+    set_encoding_settings()
+    self:update()
+end
+
+function pref_menu:nvenc_active()
+    return config.video_format == 'mp4' and config.video_encoder == 'nvenc'
+end
+
+function pref_menu:cycle_nvenc_option(config_key, options_key)
+    if not self:nvenc_active() then
+        return
+    end
+
+    local options = self[options_key]
+    local selected = 1
+    for i, option in ipairs(options) do
+        if config[config_key] == option then
+            selected = i
+            break
+        end
+    end
+    config[config_key] = options[selected + 1] or options[1]
+    self:update()
+end
+
+function pref_menu:cycle_nvenc_preset()
+    self:cycle_nvenc_option('nvenc_preset', 'nvenc_presets')
+end
+
+function pref_menu:cycle_nvenc_tune()
+    self:cycle_nvenc_option('nvenc_tune', 'nvenc_tunes')
+end
+
+function pref_menu:cycle_video_quality()
+    if not self:nvenc_active() then
+        return
+    end
+
+    self.video_qualities.selected = self.video_qualities.selected + 1 > #self.video_qualities
+            and 1 or self.video_qualities.selected + 1
+    config.video_quality = self.video_qualities[self.video_qualities.selected]
+    self:update()
+end
+
 function pref_menu:cycle_audio_formats()
     pref_menu:cycle_formats('audio_format')
 end
@@ -574,8 +706,23 @@ function pref_menu:update()
     local osd = OSD:new():config(config)
     osd:submenu('Preferences'):newline()
     osd:tab():item('r: Video resolution: '):append(self:get_selected_resolution()):newline()
-    osd:tab():item('b: Video bitrate: '):append(config.video_bitrate):newline()
+    if self:nvenc_active() then
+        osd:tab():color("b0b0b0"):text('b: Video bitrate: '):append("N/A (NVENC uses CQ)"):newline()
+    else
+        osd:tab():item('b: Video bitrate: '):append(config.video_bitrate):newline()
+    end
     osd:tab():item('f: Video format: '):append(config.video_format):newline()
+    if config.video_format == 'mp4' then
+        osd:tab():item('g: Video encoder: '):append(config.video_encoder):newline()
+    else
+        osd:tab():color("b0b0b0"):text('g: Video encoder: '):append("N/A (mp4 only)"):newline()
+    end
+    if self:nvenc_active() then
+        osd:submenu('NVENC'):newline()
+        osd:tab():item('P: Preset: '):append(config.nvenc_preset):newline()
+        osd:tab():item('T: Tune: '):append(config.nvenc_tune):newline()
+        osd:tab():item('Q: Quality (CQ): '):append(tostring(config.video_quality)):newline()
+    end
     osd:tab():item('a: Audio format: '):append(config.audio_format):newline()
     osd:tab():item('B: Audio bitrate: '):append(config.audio_bitrate):newline()
     osd:tab():item('m: Mute audio: '):append(mp.get_property("mute")):newline()

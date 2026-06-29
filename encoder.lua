@@ -86,6 +86,27 @@ this.mk_out_path_video = function(clip_filename_noext)
     return utils.join_path(h.expand_path(this.config.video_folder_path), clip_filename_noext .. this.config.video_extension)
 end
 
+local function append_video_codec_opts(args)
+    if this.config.video_encoder == 'nvenc' then
+        -- VBR + CQ mirrors libx264 CRF: quality-based rate control with good compression.
+        -- b=0 lets the encoder pick bitrate from cq alone (no artificial cap).
+        table.insert(args, '--ovcopts-add=rc=vbr')
+        table.insert(args, table.concat { '--ovcopts-add=cq=', this.config.video_quality })
+        table.insert(args, '--ovcopts-add=b=0')
+        table.insert(args, table.concat { '--ovcopts-add=preset=', this.config.nvenc_preset })
+        table.insert(args, table.concat { '--ovcopts-add=tune=', this.config.nvenc_tune })
+        table.insert(args, '--ovcopts-add=profile=high')
+        table.insert(args, '--ovcopts-add=spatial_aq=1')
+        table.insert(args, '--ovcopts-add=temporal_aq=1')
+        table.insert(args, '--ovcopts-add=rc_lookahead=32')
+        table.insert(args, '--ovcopts-add=multipass=fullres')
+    else
+        table.insert(args, table.concat { '--ovcopts-add=b=', this.config.video_bitrate })
+        table.insert(args, table.concat { '--ovcopts-add=crf=', this.config.video_quality })
+        table.insert(args, table.concat { '--ovcopts-add=preset=', this.config.preset })
+    end
+end
+
 this.mkargs_video = function(out_clip_path)
     local args = {
         this.player,
@@ -109,10 +130,7 @@ this.mkargs_video = function(out_clip_path)
         table.concat { '--aid=', mp.get_property("aid") }, -- track number
         table.concat { '--mute=', mp.get_property("mute") },
         table.concat { '--volume=', mp.get_property('volume') },
-        table.concat { '--ovcopts-add=b=', this.config.video_bitrate },
         table.concat { '--oacopts-add=b=', this.config.audio_bitrate },
-        table.concat { '--ovcopts-add=crf=', this.config.video_quality },
-        table.concat { '--ovcopts-add=preset=', this.config.preset },
         table.concat { '--vf-add=scale=', this.config.video_width, ':', this.config.video_height },
         table.concat { '--ytdl-format=', mp.get_property("ytdl-format") },
         table.concat { '--o=', out_clip_path },
@@ -123,6 +141,8 @@ this.mkargs_video = function(out_clip_path)
         table.concat { '--secondary-sub-visibility=', mp.get_property("secondary-sub-visibility") },
         table.concat { '--sub-back-color=', mp.get_property("sub-back-color") },
     }
+
+    append_video_codec_opts(args)
     if mp.get_property("sub-border-style", nil) ~= nil then
         table.insert(args, #args, table.concat { '--sub-border-style=', mp.get_property("sub-border-style") })
     end
