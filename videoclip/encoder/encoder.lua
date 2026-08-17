@@ -1,0 +1,307 @@
+--[[
+Copyright: Ajatt-Tools and contributors; https://github.com/Ajatt-Tools
+License: GNU GPL, version 3 or later; http://www.gnu.org/licenses/gpl.html
+
+Encoder facade that routes clip creation to mpv or ffmpeg backends.
+]]
+
+local mp = require('mp')
+local utils = require('mp.utils')
+local h = require('helpers')
+local mpv_encoder = require('encoder.mpv')
+local ffmpeg_encoder = require('encoder.ffmpeg')
+local fixtures = require('test_fixtures') -- loaded so videoclip tests can run inside real mpv.
+
+--- Expand a filename template by substituting the available tags.
+--- Available tags: %n = filename, %t = title, %s = start, %e = end, %d = duration,
+---                 %Y = year, %M = month, %D = day, %H = hours (24), %I = hours (12),
+---                 %P = am/pm, %N = minutes, %S = seconds.
+--- Examples:
+---    expand_filename_template('%n_%s-%e', 'video', 'video', {start=0, ['end']=1}, os.date('*t'))
+local function expand_filename_template(template, filename, title, timings, date)
+    local twelve = h.twelve_hour(date.hour)
+    -- Expand tags in one pass so tag-like text inside substituted values stays literal.
+    local substitutions = {
+        n = h.truncate_utf8_bytes(filename, 200),
+        t = h.truncate_utf8_bytes(title, 200),
+        s = h.human_readable_time(timings['start']),
+        e = h.human_readable_time(timings['end']),
+        d = h.human_readable_time(timings['end'] - timings['start']),
+        Y = tostring(date.year),
+        M = h.two_digit(date.month),
+        D = h.two_digit(date.day),
+        H = h.two_digit(date.hour),
+        I = h.two_digit(twelve.hour),
+        P = tostring(twelve.sign),
+        N = h.two_digit(date.min),
+        S = h.two_digit(date.sec),
+    }
+    return (template:gsub("%%(.)", substitutions))
+end
+
+local function clip_result_failed(ret)
+    --- Return true when the encoder process did not produce a successful result.
+    return ret == nil or ret.status ~= 0 or string.match(ret.stdout or "", "could not open") ~= nil
+end
+
+local function handle_clip_result(output_file_path, on_complete, ret, err)
+    --- Notify the user about encoder completion and run the success callback.
+    if ret == nil then
+        h.notify_error(string.format("Error: couldn't create clip %s.", output_file_path), "error", 5)
+        mp.msg.error("Clip subprocess failed: " .. (err or "unknown error"))
+        return
+    end
+    if clip_result_failed(ret) then
+        local detail = h.first_line(ret.stderr or ret.stdout or "", 160)
+        if detail ~= "" then
+            mp.msg.error(ret.stderr or ret.stdout or "")
+            h.notify_error(string.format("Couldn't create clip %s. %s", output_file_path, detail), "error", 6)
+        else
+            h.notify_error(string.format("Error: couldn't create clip %s.", output_file_path), "error", 5)
+        end
+    else
+        h.notify(string.format("Clip saved to %s.", output_file_path), "info", 2)
+        if on_complete then
+            on_complete(output_file_path)
+        end
+    end
+end
+
+--- Create the encoder facade.
+--- Routes clip creation to the mpv or ffmpeg backend based on the current config.
+local function make_encoder()
+    local this = {
+        config = nil,
+        timings = nil,
+        mpv = nil,
+        ffmpeg = nil,
+    }
+    local pub = {}
+
+    local function clean_filename(filename)
+        --- Return a sanitized filename base according to the current config.
+        filename = h.remove_extension(filename)
+        if this.config.clean_filename then
+            filename = h.remove_text_in_brackets(filename)
+            filename = h.remove_special_characters(filename)
+            -- remove_text_in_brackets might leave spaces at the start or the end, so trim those
+            filename = h.strip(filename)
+        end
+        return filename
+    end
+
+    local function construct_output_filename_noext()
+        --- Construct the configured output filename without extension.
+        local filename = mp.get_property("filename") -- filename without path
+        local title = mp.get_property("media-title") -- if the video doesn't have a title, it will fallback to filename
+        local date = os.date("*t") -- get current date and time as table
+
+        -- Apply the same operation when the video doesn't have a title
+        -- thus it will be the same as filename
+        if title == filename then
+            filename = clean_filename(filename)
+            title = filename
+        else
+            filename = clean_filename(filename)
+            title = h.clean_forbidden_characters(title)
+        end
+
+        return h.sanitize_filename(expand_filename_template(this.config.filename_template, filename, title, this.timings, date))
+    end
+
+    local function uses_ffmpeg()
+        --- Return true when the current config requires the ffmpeg backend.
+        return this.config.use_ffmpeg or this.config.copy_streams
+    end
+
+    local function mk_output_args(backend, clip_type)
+        --- Build the output path and encoder arguments for the given clip type.
+        local clip_filename_noext = construct_output_filename_noext()
+        if clip_type == 'video' then
+            local output_path = backend.mk_out_path_video(clip_filename_noext)
+            return output_path, backend.mkargs_video(output_path)
+        else
+            local output_path = backend.mk_out_path_audio(clip_filename_noext)
+            return output_path, backend.mkargs_audio(output_path)
+        end
+    end
+
+    ------------------------------------------------------------
+    --- Public
+
+    function pub.active_backend()
+        --- Return the backend selected for the current config.
+        if uses_ffmpeg() then
+            return this.ffmpeg
+        end
+        return this.mpv
+    end
+
+    local function stop_progress()
+        this.busy = false
+        if this.progress_timer then
+            this.progress_timer:kill()
+            this.progress_timer = nil
+        end
+    end
+
+    local function start_progress(output_file_path)
+        this.busy = true
+        this.encode_started_at = os.time()
+        if this.progress_timer then
+            this.progress_timer:kill()
+        end
+        local function tick()
+            local elapsed = os.time() - this.encode_started_at
+            h.notify(string.format("Encoding… %ds  %s", elapsed, output_file_path), "info", 2)
+        end
+        tick()
+        this.progress_timer = mp.add_periodic_timer(1, tick)
+    end
+
+    function pub.create_clip(clip_type, on_complete)
+        --- Create a clip of the requested type using the selected backend.
+        if clip_type == nil then
+            return
+        end
+
+        if this.busy then
+            h.notify_error("Already encoding.", "warn", 2)
+            return
+        end
+
+        if not mp.get_property("path") then
+            h.notify_error("No file is loaded.", "warn", 2)
+            return
+        end
+
+        if not this.timings:validate() then
+            h.notify_error("Wrong timings. Aborting.", "warn", 2)
+            return
+        end
+
+        if clip_type == 'audio' and mp.get_property_native("mute") then
+            h.notify_error("Audio is muted. Unmute or create a video clip.", "warn", 3)
+            return
+        end
+
+        if uses_ffmpeg() and not pub.is_alive("ffmpeg") then
+            h.notify_error("Error: ffmpeg is not found in the PATH.", "error", 5)
+            return
+        end
+
+        if this.config.copy_streams and clip_type == 'video' and mp.get_property_native("sub-visibility") then
+            h.notify("Stream copy cannot burn in subtitles. Subs will be omitted.", "warn", 3)
+        end
+
+        local backend = pub.active_backend()
+        local output_file_path = select(1, mk_output_args(backend, clip_type))
+        output_file_path = h.unique_path(output_file_path)
+        local args
+        if clip_type == 'video' then
+            args = backend.mkargs_video(output_file_path)
+        else
+            args = backend.mkargs_audio(output_file_path)
+        end
+
+        mp.msg.info("Executing: %s", table.concat(h.quote_if_necessary(args), " "))
+
+        local output_dir_path = utils.split_path(output_file_path)
+        if not h.ensure_dir(output_dir_path) then
+            h.notify_error(string.format("Error: could not create folder %s.", output_dir_path), "error", 5)
+            return
+        end
+
+        local function run_with_args(encode_args, tried_cpu_fallback)
+            local process_result = function(_, ret, err)
+                if clip_result_failed(ret)
+                        and this.config.video_encoder == 'nvenc'
+                        and clip_type == 'video'
+                        and not this.config.copy_streams
+                        and not tried_cpu_fallback then
+                    h.notify("NVENC failed, retrying with CPU…", "warn", 3)
+                    this.config.video_encoder = 'cpu'
+                    local cfg_mgr = require("config.config")
+                    cfg_mgr.set_encoding_settings(this.config)
+                    local _, cpu_args = mk_output_args(pub.active_backend(), clip_type)
+                    this.config.video_encoder = 'nvenc'
+                    cfg_mgr.set_encoding_settings(this.config)
+                    run_with_args(cpu_args, true)
+                    return
+                end
+                stop_progress()
+                handle_clip_result(output_file_path, on_complete, ret, err)
+            end
+            h.subprocess_async(encode_args, process_result)
+        end
+
+        start_progress(output_file_path)
+        run_with_args(args, false)
+    end
+
+    function pub.is_alive(encoder_name)
+        --- Return true when the named encoder ("mpv" or "ffmpeg") can be executed.
+        if encoder_name == "mpv" then
+            return this.mpv.is_alive()
+        elseif encoder_name == "ffmpeg" then
+            return this.ffmpeg.is_alive()
+        end
+        error("unknown encoder name: " .. tostring(encoder_name))
+    end
+
+    function pub.init(config, timings_mgr, opts)
+        --- Initialize encoder backends with shared config and timings state.
+        --- Pass { check_alive = false } to skip executable availability checks.
+        opts = opts or {}
+        this.config = config
+        this.timings = timings_mgr
+        this.mpv = mpv_encoder.new(config, timings_mgr)
+        this.ffmpeg = ffmpeg_encoder.new(config, timings_mgr)
+        if opts.check_alive ~= false then
+            this.mpv.set_alive()
+            this.ffmpeg.set_alive()
+        end
+        return pub
+    end
+
+    return pub
+end
+
+local function run_tests()
+    --- Run tests for filename template expansion and backend routing.
+    local fixed_date = { year = 2024, month = 3, day = 5, hour = 14, min = 7, sec = 9 }
+    local timings = { ['start'] = 1.5, ['end'] = 4.25 }
+
+    h.assert_equals(expand_filename_template('%n_%s-%e', 'video', 'video', timings, fixed_date), 'video_00m01s500ms-00m04s250ms')
+    h.assert_equals(expand_filename_template('%d', 'video', 'video', timings, fixed_date), '00m02s750ms')
+    h.assert_equals(expand_filename_template('%Y-%M-%D_%H-%I-%P-%N-%S', 'v', 't', timings, fixed_date), '2024-03-05_14-02-pm-07-09')
+    h.assert_equals(expand_filename_template('clip_%t', 'file', 'My Title', timings, fixed_date), 'clip_My Title')
+    h.assert_equals(expand_filename_template('%n_%t', '50% off', '100% Complete', timings, fixed_date), '50% off_100% Complete')
+    h.assert_equals(expand_filename_template('%n', '100%d clip', 'title', timings, fixed_date), '100%d clip')
+    h.assert_equals(expand_filename_template('%t', 'file', '100%d title', timings, fixed_date), '100%d title')
+    h.assert_equals(expand_filename_template('%x_%%', 'file', 'title', timings, fixed_date), '%x_%%')
+
+    local test_encoder = make_encoder()
+
+    -- Backend routing depends only on config flags, so executable checks are skipped.
+    local no_alive_checks = { check_alive = false }
+
+    test_encoder.init(fixtures.make_config({ use_ffmpeg = false, copy_streams = false }), fixtures.make_timings(), no_alive_checks)
+    h.assert_equals(test_encoder.active_backend().name, mpv_encoder.name)
+
+    test_encoder.init(fixtures.make_config({ use_ffmpeg = true, copy_streams = false }), fixtures.make_timings(), no_alive_checks)
+    h.assert_equals(test_encoder.active_backend().name, ffmpeg_encoder.name)
+
+    test_encoder.init(fixtures.make_config({ use_ffmpeg = false, copy_streams = true }), fixtures.make_timings(), no_alive_checks)
+    h.assert_equals(test_encoder.active_backend().name, ffmpeg_encoder.name)
+
+    h.assert_equals(clip_result_failed(nil), true)
+    h.assert_equals(clip_result_failed({ status = 1, stdout = '', stderr = 'error' }), true)
+    h.assert_equals(clip_result_failed({ status = 0, stdout = 'could not open file', stderr = '' }), true)
+    h.assert_equals(clip_result_failed({ status = 0, stdout = '', stderr = '' }), false)
+end
+
+return {
+    new = make_encoder,
+    run_tests = run_tests,
+}

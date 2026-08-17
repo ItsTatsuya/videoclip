@@ -1,3 +1,9 @@
 .idea
 .vscode
 mcps/
+
+.github/RELEASE/*.conf
+.github/RELEASE/*.zip
+
+/*.md
+!/README.md

@@ -1,5 +1,5 @@
 --[[
-Copyright: Ren Tatsumoto and contributors
+Copyright: Ajatt-Tools and contributors; https://github.com/Ajatt-Tools
 License: GNU GPL, version 3 or later; http://www.gnu.org/licenses/gpl.html
 
 Various helper functions.
@@ -10,13 +10,11 @@ local utils = require('mp.utils')
 local this = {}
 local ass_start = mp.get_property_osd("osd-ass-cc/0")
 
-local WINDOWS_RESERVED = {
-    CON = true, PRN = true, AUX = true, NUL = true,
-    COM1 = true, COM2 = true, COM3 = true, COM4 = true, COM5 = true,
-    COM6 = true, COM7 = true, COM8 = true, COM9 = true,
-    LPT1 = true, LPT2 = true, LPT3 = true, LPT4 = true, LPT5 = true,
-    LPT6 = true, LPT7 = true, LPT8 = true, LPT9 = true,
-}
+this.unpack = unpack or table.unpack
+
+this.is_empty = function(var)
+    return var == nil or var == '' or (type(var) == 'table' and next(var) == nil)
+end
 
 this.is_wayland = function()
     return os.getenv('WAYLAND_DISPLAY') ~= nil
@@ -81,7 +79,7 @@ this.subprocess_async = function(args, on_complete)
         playback_only = false,
         capture_stdout = true,
         capture_stderr = true,
-        args = args,
+        args = args
     }
     return mp.command_native_async(command_table, on_complete)
 end
@@ -115,10 +113,6 @@ this.twelve_hour = function(num)
     return { sign = sign, hour = hour }
 end
 
-this.expand_path = function(str)
-    return mp.command_native({"expand-path", str})
-end
-
 -- Locale-safe seconds -> "123.456" (never uses a comma decimal).
 this.format_timestamp = function(timestamp)
     local ms_total = math.floor((tonumber(timestamp) or 0) * 1000 + 0.5)
@@ -128,6 +122,10 @@ this.format_timestamp = function(timestamp)
     local sec = math.floor(ms_total / 1000)
     local frac = ms_total % 1000
     return string.format("%d.%03d", sec, frac)
+end
+
+this.expand_path = function(str)
+    return mp.command_native({ "expand-path", str })
 end
 
 this.human_readable_time = function(seconds)
@@ -163,6 +161,38 @@ this.quote_if_necessary = function(args)
     return ret
 end
 
+--- Split a command string into argv-style tokens, honoring double quotes.
+--- Pure: depends only on the input string.
+--- Examples:
+---    parse_command_args('curl -F file=@x') → { "curl", "-F", "file=@x" }
+---    parse_command_args('curl -F "a b"') → { "curl", "-F", "a b" }
+---    parse_command_args('') → {}
+this.parse_command_args = function(cmd_str)
+    local args = {}
+    local buffer = ""
+    local in_quote = false
+
+    for i = 1, #cmd_str do
+        local c = cmd_str:sub(i, i)
+        if c == '"' then
+            in_quote = not in_quote
+        elseif c:match("%s") and not in_quote then
+            if not this.is_empty(buffer) then
+                table.insert(args, buffer)
+                buffer = ""
+            end
+        else
+            buffer = buffer .. c
+        end
+    end
+
+    if not this.is_empty(buffer) then
+        table.insert(args, buffer)
+    end
+
+    return args
+end
+
 this.query_xdg_user_dir = function(name)
     local r = this.subprocess({ "xdg-user-dir", name })
     if r.status == 0 then
@@ -176,49 +206,13 @@ this.query_user_home_dir = function()
     return os.getenv("HOME") or os.getenv("USERPROFILE") or "."
 end
 
-this.clean_forbidden_characters = function(title)
-    return title:gsub('[<>:"/\\|%?%*]+', '.')
-end
-
-this.truncate_utf8_bytes = function(s, max_bytes)
-    local size = #s
-    local idx = 1
-
-    if size <= max_bytes then
-        return s
-    end
-
-    while idx <= size do
-        local b = s:byte(idx)
-        local char_len = 1
-        if not b then
-            break
-        end
-
-        if b <= 0x7F then
-            char_len = 1
-        elseif b >= 0xC2 and b <= 0xDF then
-            char_len = 2
-        elseif b >= 0xE0 and b <= 0xEF then
-            char_len = 3
-        elseif b >= 0xF0 and b <= 0xF4 then
-            char_len = 4
-        else
-            break
-        end
-
-        if idx - 1 + char_len > max_bytes then
-            break
-        end
-
-        idx = idx + char_len
-    end
-
-    if idx <= 1 then
-        return "new_file"
-    end
-    return s:sub(1, idx - 1)
-end
+local WINDOWS_RESERVED = {
+    CON = true, PRN = true, AUX = true, NUL = true,
+    COM1 = true, COM2 = true, COM3 = true, COM4 = true, COM5 = true,
+    COM6 = true, COM7 = true, COM8 = true, COM9 = true,
+    LPT1 = true, LPT2 = true, LPT3 = true, LPT4 = true, LPT5 = true,
+    LPT6 = true, LPT7 = true, LPT8 = true, LPT9 = true,
+}
 
 this.sanitize_filename = function(name)
     name = this.clean_forbidden_characters(name or "")
@@ -327,17 +321,126 @@ this.ellipsize_middle = function(str, max_len)
     return str:sub(1, keep) .. "..." .. str:sub(#str - keep + 1)
 end
 
-this.apply_template = function(template, vars)
-    return (template:gsub("%%(.)", function(key)
-        if key == "%" then
-            return "%"
+this.clean_forbidden_characters = function(title)
+    return title:gsub('[<>:"/\\|%?%*]+', '.')
+end
+
+this.repr = function(value)
+    --- Return a test-friendly string representation of a value.
+    if type(value) == 'table' then
+        return utils.format_json(value)
+    else
+        return value
+    end
+end
+
+this.equal = function(first, last)
+    --- Test whether two values are equal.
+    return this.repr(first) == this.repr(last)
+end
+
+this.assert_equals = function(actual, expected)
+    --- Raise an error if actual and expected are not equal.
+    if this.equal(actual, expected) == false then
+        error(string.format("TEST FAILED: Expected '%s', got '%s'", this.repr(expected), this.repr(actual)))
+    end
+end
+
+this.truncate_utf8_bytes = function(s, max_bytes)
+    local size = #s
+    local idx = 1
+
+    if size <= max_bytes then
+        return s
+    end
+
+    while idx <= size do
+        local b = s:byte(idx)
+        local char_len = 1
+        if not b then
+            break
         end
-        local value = vars[key]
-        if value == nil then
-            return "%" .. key
+
+        if b <= 0x7F then
+            char_len = 1
+        elseif b >= 0xC2 and b <= 0xDF then
+            char_len = 2
+        elseif b >= 0xE0 and b <= 0xEF then
+            char_len = 3
+        elseif b >= 0xF0 and b <= 0xF4 then
+            char_len = 4
+        else
+            break
         end
-        return tostring(value)
-    end))
+
+        if idx - 1 + char_len > max_bytes then
+            break
+        end
+
+        idx = idx + char_len
+    end
+
+    if idx <= 1 then
+        return "new_file"
+    end
+    return s:sub(1, idx - 1)
+end
+
+function this.partial(callable, ...)
+    local preset = { ... }
+    return function(...)
+        local args = {}
+
+        for i = 1, #preset do
+            args[#args + 1] = preset[i]
+        end
+        for i = 1, select("#", ...) do
+            args[#args + 1] = select(i, ...)
+        end
+
+        return callable(this.unpack(args))
+    end
+end
+
+this.run_tests = function()
+    --- Run unit tests for helper functions.
+    this.assert_equals(this.is_empty(nil), true)
+    this.assert_equals(this.is_empty(''), true)
+    this.assert_equals(this.is_empty({}), true)
+    this.assert_equals(this.is_empty('x'), false)
+
+    this.assert_equals(this.remove_extension('video.mkv'), 'video')
+    this.assert_equals(this.remove_text_in_brackets('a [b] c'), 'a  c')
+    this.assert_equals(this.remove_special_characters('a-b_c!'), 'a b c')
+    this.assert_equals(this.strip('  abc  '), 'abc')
+    this.assert_equals(this.two_digit(7), '07')
+    this.assert_equals(this.twelve_hour(13).hour, 1)
+    this.assert_equals(this.twelve_hour(13).sign, 'pm')
+    this.assert_equals(this.twelve_hour(0).hour, 12)
+    this.assert_equals(this.twelve_hour(0).sign, 'am')
+    this.assert_equals(this.twelve_hour(12).hour, 12)
+    this.assert_equals(this.twelve_hour(12).sign, 'pm')
+    this.assert_equals(this.format_timestamp(1.234), '1.234')
+    this.assert_equals(this.format_timestamp(1.23456), '1.235')
+
+    this.assert_equals(this.human_readable_time(-1), 'empty')
+    this.assert_equals(this.human_readable_time(61.234), '01m01s234ms')
+    this.assert_equals(this.clean_forbidden_characters('a:b?c'), 'a.b.c')
+    this.assert_equals(this.repr({ a = 1 }), utils.format_json({ a = 1 }))
+    this.assert_equals(this.repr({ a = 1 }), '{"a":1}')
+    this.assert_equals(this.equal({ a = 1 }, { a = 1 }), true)
+    this.assert_equals(this.truncate_utf8_bytes('abcdef', 3), 'abc')
+
+    local function greet(greeting, name)
+        return greeting .. ", " .. name
+    end
+
+    this.assert_equals(this.partial(greet, "Hello")("Lua"), "Hello, Lua")
+
+    this.assert_equals(this.parse_command_args('curl -F file=@x'), { "curl", "-F", "file=@x" })
+    this.assert_equals(this.parse_command_args('curl -F "a b"'), { "curl", "-F", "a b" })
+    this.assert_equals(this.parse_command_args(''), {})
+    this.assert_equals(this.parse_command_args('  a  b  '), { "a", "b" })
 end
 
 return this
