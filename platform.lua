@@ -55,35 +55,39 @@ this.open = function(file_or_url)
     return mp.commandv('run', this.open_utility, file_or_url)
 end
 
+local function copy_via_mpv(text)
+    return pcall(mp.set_property, "clipboard/text", text)
+end
+
 this.clipboard = (function()
     local self = {}
     if this.platform == this.Platform.windows then
         self.clip_exe = "powershell.exe"
+        -- $input reads stdin so the value is never interpolated into the command string.
         self.copy = function(text)
-            return h.subprocess({ self.clip_exe, '-command', 'Set-Clipboard -Value ' .. text })
+            return h.subprocess({
+                self.clip_exe,
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                'Set-Clipboard -Value $input',
+            }, text)
         end
     else
         if this.platform == this.Platform.macos then
             self.clip_exe = "pbcopy"
-            self.clip_cmd = "LANG=en_US.UTF-8 pbcopy"
+            self.copy = function(text)
+                return h.subprocess({ "pbcopy" }, text)
+            end
         elseif h.is_wayland() then
             self.clip_exe = "wl-copy"
-            self.clip_cmd = "wl-copy"
+            self.copy = function(text)
+                return h.subprocess({ "wl-copy" }, text)
+            end
         else
             self.clip_exe = "xclip"
-            self.clip_cmd = "xclip -i -selection clipboard"
-        end
-        self.copy = function(text)
-            local handle = io.popen(self.clip_cmd, 'w')
-            if handle then
-                handle:write(text)
-                local success, status, signal = handle:close()
-                if success then
-                    status = 0
-                end
-                return { status = status }
-            else
-                return { status = 1 }
+            self.copy = function(text)
+                return h.subprocess({ "xclip", "-i", "-selection", "clipboard" }, text)
             end
         end
     end
@@ -91,17 +95,24 @@ this.clipboard = (function()
 end)()
 
 this.copy_or_open_url = function(url)
+    if copy_via_mpv(url) then
+        h.notify("Done! Copied URL to clipboard.", "info", 2)
+        return { status = 0 }
+    end
+
     local cb = this.clipboard.copy(url)
-    if cb.status ~= 0 then
+    if not cb or cb.status ~= 0 then
         local msg = string.format(
                 "Failed to copy URL to clipboard, trying to open in browser instead. Make sure %s is installed.",
                 this.clipboard.clip_exe
         )
         h.notify_error(msg, "warn", 4)
         this.open(url)
-    else
-        h.notify("Done! Copied URL to clipboard.", "info", 2)
+        return cb or { status = 1 }
     end
+
+    h.notify("Done! Copied URL to clipboard.", "info", 2)
     return cb
 end
+
 return this

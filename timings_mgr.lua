@@ -22,8 +22,24 @@ function Timings:reset()
     self['end'] = -1
 end
 
+function Timings:normalize()
+    if self['start'] >= 0 and self['end'] >= 0 and self['start'] > self['end'] then
+        self['start'], self['end'] = self['end'], self['start']
+        return true
+    end
+    return false
+end
+
 function Timings:validate()
+    self:normalize()
     return self['start'] >= 0 and self['start'] < self['end']
+end
+
+function Timings:duration()
+    if not self:validate() then
+        return 0
+    end
+    return self['end'] - self['start']
 end
 
 return Timings

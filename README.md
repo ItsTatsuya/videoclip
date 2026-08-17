@@ -8,21 +8,19 @@
 [![Patreon](https://img.shields.io/badge/support-patreon-orange)](https://tatsumoto.neocities.org/blog/donating-to-tatsumoto.html)
 
 Easily create video and audio clips with mpv in a few keypresses.
-Videoclips are saved as `.mp4` or `.webm`.
-Subtitles can be embedded into the clips.
+Videoclips are saved as `.mp4` or `.webm` (or copied in the source container).
+Audio clips are saved as `.m4a`, `.opus`, or `.mp3`.
+Subtitles can be burned into re-encoded clips.
 
 ## Prerequisites
 
 1) [Install mpv](https://mpv.io/installation/).
-2) Add the directory where `mpv` is installed
-   to the [PATH](https://www.mojeek.com/search?q=path+variable).
+2) Encoding uses the same `mpv` binary that is playing the file
+   (`binary_path`). A portable install does not need to be on `PATH`.
 
-   If you're using GNU/Linux, this step is likely unnecessary
-   because package managers (`apt`, `pacman`, etc.)
-   place executable files to `/usr/bin` which is already added to the `PATH`.
-   If you have installed `mpv` to a non-standard location,
-   or if you're not using the GNU operating system,
-   you need to make sure that `mpv` is added to the `PATH`.
+   If you are on an older mpv without `binary_path`, add the directory
+   where `mpv` is installed to the
+   [PATH](https://www.mojeek.com/search?q=path+variable).
 
 ## Installation
 
@@ -107,11 +105,13 @@ clean_filename=yes
 # Video settings
 video_width=-2
 video_height=480
+# Kept for compatibility. Re-encodes use quality (CRF/CQ), not bitrate.
 video_bitrate=1M
 # Available video formats: mp4, vp9, vp8
+# Video clips use AAC inside mp4 and Opus inside webm.
 video_format=mp4
 # Video encoder: cpu (libx264) or nvenc (h264_nvenc, NVIDIA GPU).
-# NVENC only applies when video_format=mp4.
+# NVENC only applies when video_format=mp4. Failed NVENC encodes retry on CPU.
 video_encoder=cpu
 # The range of the scale is 0–51, where 0 is lossless,
 # 23 is the default, and 51 is worst quality possible.
@@ -126,19 +126,28 @@ nvenc_preset=p5
 # NVENC tune: hq (quality), ll (low latency), ull, lossless.
 nvenc_tune=hq
 
-# In the preferences menu (press p), set video_encoder=nvenc to enable GPU encoding.
-# With NVENC active, additional keys are available:
-#   P - cycle NVENC preset (p1-p7)
-#   T - cycle NVENC tune (hq, ll, ull, lossless)
-#   Q - cycle quality/CQ (15-35, lower = better quality)
+# Copy streams instead of re-encoding (fast, lossless, keyframe-accurate).
+# Subtitles cannot be burned in while copying.
+copy_streams=no
+# HDR tone-map: auto (when source is HDR), hable (always), no (never).
+tonemap=auto
+
+# In the preferences menu (press p):
+#   Q - cycle quality CRF/CQ (15-35, lower = better quality)
+#   P - cycle encoder preset (libx264 names, or p1-p7 when NVENC is on)
+#   T - cycle NVENC tune (only when NVENC is on)
+#   F - cycle FPS (auto, 24, 25, 30, 50, 60)
+#   k - toggle stream copy
+#   n - cycle tone-map mode
 # FPS / framerate. Set to "auto" or a number.
 video_fps=auto
 #video_fps=60
 
-# Audio settings
-# Available formats: opus or aac
+# Audio settings (audio-only clips)
+# Available formats: opus (.opus), aac (.m4a), or mp3 (.mp3)
 audio_format=opus
-# Opus sounds good at low bitrates 32-64k, but aac requires 128-256k.
+# Opus sounds good at low bitrates 32-64k, but aac and mp3 require 128-256k.
+# AAC/MP3 encodes below 96k are raised to 128k automatically.
 audio_bitrate=32k
 
 # Catbox.moe upload settings
@@ -178,16 +187,40 @@ Add this line if you want to change the key that opens the script's menu.
 c script-binding videoclip-menu-open
 ```
 
+Other scripts or `input.conf` can drive videoclip without the menu:
+
+```
+script-message videoclip-set-start
+script-message videoclip-set-end
+script-message videoclip-set-start 12.5
+script-message videoclip-set-end 20
+script-message videoclip-reset
+script-message videoclip-create-video
+script-message videoclip-create-audio
+script-message videoclip-create-video-upload
+script-message videoclip-menu-open
+```
+
 ## Usage
 
 - Open a file in mpv and press `c` to open the script menu.
-- Follow the onscreen instructions. You need to set the `start point`,
-`end point`, and then press `c` to create the clip.
+- Set the start point (`s`) and end point (`e`). If you set them in
+  the wrong order they are swapped automatically.
+- `[` / `]` seek to the start / end. `l` loops the selection for a preview.
+- Press `c` to create a video clip, `a` for audio, `x` to create and upload.
+  Shift+`c` / Shift+`x` force a 1080p-tall encode (ignored in stream-copy mode).
+- `k` toggles stream copy (lossless remux, cuts on keyframes).
+- `r` resets timings. Times are also cleared when you open a new file.
+  Creating a clip no longer wipes the current range.
 
 It is possible to create silent videoclips.
 To do that, first mute audio in mpv.
 The default key binding is `m`.
+Muted playback will not create a silent *audio* clip; unmute first.
 
-If a video has visible subtitles, they will be embedded automatically.
+If a video has visible subtitles, they will be burned in when re-encoding.
 Toggle them off in mpv if you don't want any subtitles to be visible.
-The default key binding is `v`.
+The default key binding is `v`. Stream copy cannot burn in subtitles.
+
+Existing output files are not overwritten; a `-2`, `-3`, … suffix is added.
+Missing output folders are created automatically. mp4 outputs use `faststart`.
