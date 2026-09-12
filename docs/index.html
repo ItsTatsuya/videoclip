@@ -28,7 +28,7 @@
         <pre><code id="command">&amp; ([scriptblock]::Create((Invoke-RestMethod 'https://itstatsuya.github.io/videoclip/install.ps1')))</code></pre>
         <button type="button" class="copy" id="copy">Copy command</button><span class="status" id="status" role="status" aria-live="polite"></span>
       </div>
-      <p class="note">No Git needed. The installer downloads Videoclip, creates <code>script-opts</code>, and keeps your saved preferences. Run the same command to update.</p>
+      <p class="note">No Git needed. The installer downloads Videoclip, creates <code>script-opts</code>, installs FFmpeg on Windows when needed, and keeps your saved preferences. Run the same command to update.</p>
       <p class="note">Already have <a href="https://mpv.io/installation/">mpv installed</a>? You’re set. This installs the plugin, not the player. <a id="source" href="install.ps1">Read the installer</a>.</p>
       <noscript><p>Linux / macOS: run <code>curl -fsSL https://itstatsuya.github.io/videoclip/install.sh | sh</code>. Or read the <a href="install.sh">shell installer</a>.</p></noscript>
     </section>
@@ -39,7 +39,7 @@
     </div></section>
     <details><summary>Portable mpv or a custom configuration folder?</summary><p>Windows detects <code>MPV_HOME</code>, or a <code>portable_config</code> next to mpv found on PATH or running. Otherwise it uses <code>%APPDATA%/mpv</code>. For a portable player that cannot be detected, specify its folder:</p><pre><code>&amp; ([scriptblock]::Create((Invoke-RestMethod 'https://itstatsuya.github.io/videoclip/install.ps1'))) -ConfigDir 'D:/Apps/mpv/portable_config'</code></pre><p>Linux/macOS respects <code>MPV_HOME</code> and <code>XDG_CONFIG_HOME</code>. You can also supply a directory:</p><pre><code>curl -fsSL https://itstatsuya.github.io/videoclip/install.sh | sh -s -- '/path/to/mpv-config'</code></pre></details>
     <details><summary>What happens when I update?</summary><p>Run the same install command again. Your preferences remain in <code>script-opts/videoclip.conf</code>. The previous plugin is kept in <code>videoclip-backups</code> in the mpv configuration directory. Git checkouts are left alone; use <code>git pull</code> for those installs.</p></details>
-    <details><summary>Do I need FFmpeg or an NVIDIA GPU?</summary><p>No. Standard exports use mpv and your CPU. FFmpeg is optional for stream copy and the FFmpeg backend. NVIDIA NVENC is optional for MP4 encoding. Uploads need cURL. See the <a href="https://github.com/ItsTatsuya/videoclip#preferences-and-the-script-opts-folder">README</a> for settings and troubleshooting.</p></details>
+    <details><summary>Do I need FFmpeg or an NVIDIA GPU?</summary><p>No GPU is required. Standard exports use mpv and your CPU. FFmpeg is required for stream copy and the FFmpeg backend; the Windows installer installs it automatically when it is missing, while Linux / macOS users should install it separately. NVIDIA NVENC is optional for MP4 encoding. Uploads need cURL. See the <a href="https://github.com/ItsTatsuya/videoclip#preferences-and-the-script-opts-folder">README</a> for settings and troubleshooting.</p></details>
   </main>
   <footer>Free and open source. Based on <a href="https://github.com/Ajatt-Tools/videoclip">Ajatt-Tools/videoclip</a>. <a href="https://github.com/ItsTatsuya/videoclip/blob/master/LICENSE">License</a></footer>
   <script>

@@ -11,7 +11,7 @@ Save video and audio clips directly from mpv. Set a start and end time, preview 
 
 **[Open the installation page](https://itstatsuya.github.io/videoclip/)** or paste one command below. You only need [mpv](https://mpv.io/installation/) installed; **Git is not required**.
 
-The installer downloads the plugin archive, creates `scripts` and `script-opts`, and installs a default config only if one does not already exist. Run it as your normal user, then restart mpv.
+The installer downloads the plugin archive, creates `scripts` and `script-opts`, and installs a default config only if one does not already exist. On Windows, it also installs FFmpeg if it is missing and adds it to your user `PATH`. Run it as your normal user, then restart mpv.
 
 ### Windows — PowerShell
 
@@ -45,7 +45,7 @@ These installers target standalone mpv. Players that embed mpv may use different
 
 ### Optional tools
 
-- **FFmpeg:** install [FFmpeg](https://ffmpeg.org/download.html) and put it on `PATH` to use stream copy or the FFmpeg backend.
+- **FFmpeg:** the Windows installer installs FFmpeg and adds it to your user `PATH` when it is missing. On Linux / macOS, install [FFmpeg](https://ffmpeg.org/download.html) and put it on `PATH` to use stream copy or the FFmpeg backend.
 - **Uploads:** install cURL and put it on `PATH` if your system does not already provide it.
 - Normal encoding uses the running mpv executable when its `binary_path` property is available. Older mpv versions may need mpv on `PATH`.
 

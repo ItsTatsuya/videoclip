@@ -55,9 +55,9 @@ def main():
 
             def install(fail=False):
                 stub = "function Invoke-WebRequest { throw 'Simulated network failure' }\n" if fail else prelude
-                command = "$ErrorActionPreference='Stop'\n" + stub + '& ' + psquote(script) + ' -ConfigDir ' + psquote(config)
+                command = "$ErrorActionPreference='Stop'\n" + stub + '& ' + psquote(script) + ' -ConfigDir ' + psquote(config) + ' -SkipFfmpeg'
                 if fail:
-                    command = "$ErrorActionPreference='Stop'\n" + stub + "try { & " + psquote(script) + ' -ConfigDir ' + psquote(config) + "; throw 'Expected rejection' } catch { if ($_.Exception.Message -eq 'Expected rejection') { throw }; Write-Output 'Expected installer rejection' }"
+                    command = "$ErrorActionPreference='Stop'\n" + stub + "try { & " + psquote(script) + ' -ConfigDir ' + psquote(config) + ' -SkipFfmpeg' + "; throw 'Expected rejection' } catch { if ($_.Exception.Message -eq 'Expected rejection') { throw }; Write-Output 'Expected installer rejection' }"
                 run([powershell, '-NoProfile', '-NonInteractive', '-Command', command])
 
             install()
