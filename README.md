@@ -1,142 +1,186 @@
-![screenshot](https://github.com/Lemmmy/videoclip/assets/858456/855bff15-b0cd-4c12-a9ac-40a5e01d3b83)
+# Videoclip for mpv
 
-# videoclip
+Save video and audio clips directly from mpv. Set a start and end time, preview the selection, then save locally or upload to Catbox/Litterbox.
 
-[![Chat](https://img.shields.io/badge/chat-join-green)](https://tatsumoto-ren.github.io/blog/join-our-community.html)
-![GitHub](https://img.shields.io/github/license/Ajatt-Tools/videoclip)
-![GitHub top language](https://img.shields.io/github/languages/top/Ajatt-Tools/videoclip)
-[![Patreon](https://img.shields.io/badge/support-patreon-orange)](https://tatsumoto.neocities.org/blog/donating-to-tatsumoto.html)
+- Video: MP4 or WebM, with CPU or NVIDIA NVENC encoding.
+- Audio: AAC (`.m4a`), Opus, or MP3.
+- Stream copy: keep the original streams without re-encoding; cuts depend on keyframes.
+- Keyboard menus for video, audio, and upload preferences.
 
-Easily create video and audio clips with mpv in a few keypresses.
-Videoclips are saved as `.mp4` or `.webm` (or copied in the source container).
-Audio clips are saved as `.m4a`, `.opus`, or `.mp3`.
-Subtitles can be burned into re-encoded clips.
+## Install
 
-## Prerequisites
+**[Open the installation page](https://itstatsuya.github.io/videoclip/)** or paste one command below. You only need [mpv](https://mpv.io/installation/) installed; **Git is not required**.
 
-1) [Install mpv](https://mpv.io/installation/).
-2) Encoding uses the same `mpv` binary that is playing the file
-   (`binary_path`). A portable install does not need to be on `PATH`.
+The installer downloads the plugin archive, creates `scripts` and `script-opts`, and installs a default config only if one does not already exist. Run it as your normal user, then restart mpv.
 
-   If you are on an older mpv without `binary_path`, add the directory
-   where `mpv` is installed to the
-   [PATH](https://www.mojeek.com/search?q=path+variable).
-3) Optional: install [FFmpeg](https://www.ffmpeg.org/download.html) and add it
-   to `PATH` for the FFmpeg backend and for lossless stream copy.
+### Windows — PowerShell
 
-## Installation
-
-### Using git
-
-Clone the repository to the `mpv/scripts` directory.
-The command below works on the GNU operating system with `git` installed.
-
-``` bash
-git clone 'https://github.com/Ajatt-Tools/videoclip.git' ~/.config/mpv/scripts/videoclip
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://itstatsuya.github.io/videoclip/install.ps1')))
 ```
 
-To update the user-script on demand later, you can execute:
+[Read the PowerShell installer](docs/install.ps1). It uses `MPV_HOME` when set, otherwise detects `portable_config` beside mpv on PATH or running, and falls back to `%APPDATA%/mpv`.
 
-``` bash
-cd ~/.config/mpv/scripts/videoclip && git pull
+For a portable player that cannot be detected, or a custom `--config-dir`, pass the actual configuration folder:
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://itstatsuya.github.io/videoclip/install.ps1'))) -ConfigDir 'D:/Apps/mpv/portable_config'
 ```
 
-### Using make
+### Linux / macOS — Terminal
 
-Clone the repository first, then install to `~/.config/mpv` by running:
-
-``` bash
-git clone 'https://github.com/Ajatt-Tools/videoclip.git'
-cd videoclip
-make install
+```sh
+curl -fsSL https://itstatsuya.github.io/videoclip/install.sh | sh
 ```
 
-The installation target copies the `videoclip/` directory to `~/.config/mpv/scripts/`.
-If none exists, installs the example config to `~/.config/mpv/script-opts/videoclip.conf`.
+[Read the shell installer](docs/install.sh). It uses `MPV_HOME`, then `XDG_CONFIG_HOME/mpv`, then `~/.config/mpv`. It needs standard `tar` and `curl` tools; no Git or unzip is required.
 
-To uninstall, run:
+For a custom directory:
 
-``` bash
-make uninstall
+```sh
+curl -fsSL https://itstatsuya.github.io/videoclip/install.sh | sh -s -- '/path/to/mpv-config'
 ```
 
-To install to a different mpv config directory, set `PREFIX`:
+These installers target standalone mpv. Players that embed mpv may use different script locations. See [mpv configuration locations](https://mpv.io/manual/master/#files).
 
-``` bash
-make PREFIX="$HOME/.config/mpv" install
+### Optional tools
+
+- **FFmpeg:** install [FFmpeg](https://ffmpeg.org/download.html) and put it on `PATH` to use stream copy or the FFmpeg backend.
+- **Uploads:** install cURL and put it on `PATH` if your system does not already provide it.
+- Normal encoding uses the running mpv executable when its `binary_path` property is available. Older mpv versions may need mpv on `PATH`.
+
+### Manual ZIP install (optional)
+
+1. Download [the ZIP](https://github.com/ItsTatsuya/videoclip/archive/refs/heads/master.zip) and extract it.
+2. Rename the extracted `videoclip-master` folder to `videoclip` and place it in your mpv `scripts` folder.
+3. Create `script-opts` alongside `scripts`.
+4. Copy `videoclip/config/default_config.conf` from inside the extracted repository to `script-opts/videoclip.conf`. Keep your existing config if one is already there.
+5. Restart mpv and press `c` while a video is loaded.
+
+The one-command installer creates this layout (a manual ZIP or Git install also includes repository files):
+
+```text
+mpv/
+├── scripts/
+│   └── videoclip/
+│       ├── main.lua
+│       └── videoclip/
+│           ├── videoclip.lua
+│           └── config/default_config.conf
+└── script-opts/
+    └── videoclip.conf
 ```
 
-### Manually
+## Make your first clip
 
-1) Download
-   [the latest release](https://github.com/Ajatt-Tools/videoclip/releases)
-   or [the master branch (trunk)](https://github.com/Ajatt-Tools/videoclip/archive/refs/heads/master.zip)
-2) Extract the `videoclip/` directory from the zip file
-   to your [mpv scripts](https://github.com/mpv-player/mpv/wiki/User-Scripts) directory.
+1. Open a video in mpv and press **c** to open Videoclip.
+2. Seek to the beginning of your clip and press **s**.
+3. Seek to the end and press **e**.
+4. Press **l** to preview the range in a loop.
+5. Press **c** to save video, or **a** to save audio.
 
-| OS | Location |
+The default output folders are your Videos and Music folders (Movies on macOS for video); Linux uses XDG media folders when available. Their actual paths appear under **p → 3**. Missing output folders are created automatically.
+
+### Main-menu shortcuts
+
+| Key | Action |
 | --- | --- |
-| GNU/Linux | `~/.config/mpv/scripts/` |
-| Windows | `C:/Users/Username/AppData/Roaming/mpv/scripts/` |
+| `s` / `e` | Set start / end at the current playback time |
+| `Shift+s` / `Shift+e` | Set start / end using subtitle timings |
+| `[` / `]` | Go to start / end |
+| `l` | Toggle preview loop |
+| `r` | Reset the range |
+| `c` / `a` | Save video / audio |
+| `x` | Save video and upload to the configured destination |
+| `Shift+c` / `Shift+x` | Save / upload at 1080p height; re-encode mode only |
+| `k` | Switch between re-encoding and stream copy |
+| `p` | Open preferences |
+| `Esc` | Close the menu |
 
-Note: in [Celluloid](https://www.archlinux.org/packages/community/x86_64/celluloid/)
-user scripts are installed by switching to the "Plugins" tab
-in the preferences dialog and dropping the files there.
+Setting the endpoints in reverse order swaps them automatically. Saving a clip keeps the range; loading another file clears it. Existing output names receive a numeric suffix.
 
-<details>
+## Preferences and the script-opts folder
 
-<summary>Expected directory tree</summary>
+**`script-opts` must exist and be writable to save preferences.** It is not present in every mpv installation. The installers above create it, and the script also attempts to create it when you save.
 
+To save settings: press **c → p**, choose a page, change the displayed settings, then press **s** while in preferences.
+
+- **1 — Video:** format, resolution, encoder, quality, subtitles, and HDR conversion.
+- **2 — Audio:** audio format, bitrate, and mute.
+- **3 — Upload / folders:** upload destination, expiry, and output folder paths.
+- **Esc:** return to the main menu.
+
+Changes apply during the current session. Pressing **s** writes the plugin settings to `script-opts/videoclip.conf` for future sessions. Playback mute and subtitle visibility are mpv playback settings and are not saved in this file. Saving rewrites the config and its comments.
+
+### Create script-opts for an existing install
+
+**PowerShell:**
+
+```powershell
+$mpvConfig = Join-Path $env:APPDATA 'mpv'
+New-Item -ItemType Directory -Force -Path (Join-Path $mpvConfig 'script-opts') | Out-Null
 ```
-~/.config/mpv/scripts
-|-- other_addon_1
-|-- other_addon_2
-`-- videoclip
-    |-- main.lua
-    |-- ...
-    `-- videoclip.lua
+
+**Linux / macOS:**
+
+```sh
+mkdir -p "${MPV_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/mpv}/script-opts"
 ```
 
-</details>
+For portable or custom installs, use the same configuration directory you installed into. Then press **s** in preferences to create `videoclip.conf`.
 
-## Configuration
+### Edit the config manually
 
-The config file should be created by the user, if needed.
-
-| OS | Config location |
+| Install | Default preferences file |
 | --- | --- |
-| GNU/Linux | `~/.config/mpv/script-opts/videoclip.conf` |
-| Windows | `C:/Users/Username/AppData/Roaming/mpv/script-opts/videoclip.conf` |
+| Windows | `%APPDATA%/mpv/script-opts/videoclip.conf` |
+| Linux / macOS | `~/.config/mpv/script-opts/videoclip.conf` |
+| Portable Windows | `portable_config/script-opts/videoclip.conf` beside `mpv.exe` |
 
-If a parameter is not specified in the config file, the default value will be used.
-mpv doesn't tolerate spaces before and after `=`.
+Linux/macOS commands respect `MPV_HOME` and `XDG_CONFIG_HOME`. You can edit output folders and other options in this file; see the [example config](videoclip/config/default_config.conf). Restart mpv after manual edits. Use `key=value`, for example:
 
-The example configuration file is stored in
-[`videoclip/config/default_config.conf`](videoclip/config/default_config.conf).
-Release pages also provide it as `videoclip.conf`.
-
-Copy it to your `script-opts` directory and edit it as needed.
-
-Extra options on this fork: `video_encoder` (`cpu`/`nvenc`), `nvenc_preset`, `nvenc_tune`, and `audio_format=mp3`.
-
-### Key bindings
-
-| OS | Config location |
-| --- | --- |
-| GNU/Linux | `~/.config/mpv/input.conf` |
-| Windows | `C:/Users/Username/AppData/Roaming/mpv/input.conf` |
-
-Add this line if you want to change the key that opens the script's menu.
-
+```ini
+video_folder_path=~/Videos/Clips
+audio_folder_path=~/Music/Clips
+video_height=720
+video_encoder=cpu
 ```
+
+### Encoding notes
+
+- **Subtitles / HDR:** use the mpv backend. FFmpeg re-encoding requires visible subtitles and HDR conversion to be disabled.
+- **WebM:** video exports use Opus audio. Audio-only exports and MP4 video use your audio format preference.
+- **NVENC:** available for MP4 with a compatible NVIDIA GPU. Failed NVENC exports retry using the CPU.
+- **Stream copy:** requires FFmpeg; preserves codecs and ignores resize/quality options. Subtitles are omitted.
+- **Mute:** mute playback for silent video. Unmute before exporting an audio-only clip.
+- **Uploads:** `x` sends the clip to the selected service. Litterbox is temporary; Catbox is permanent. Change the destination in preferences.
+
+## Update
+
+**Run the same installation command again**, then restart mpv. Your saved preferences stay in `script-opts/videoclip.conf`.
+
+Before replacing an existing plugin, the installer moves it into `videoclip-backups` in your mpv configuration directory. This backup is outside `scripts`, so mpv will not load two copies. Failed downloads leave the installed plugin untouched.
+
+**Existing Git installations:** the installer will not replace a Git checkout. Continue using `git pull --ff-only` inside that checkout, or move the checkout outside `scripts` before using the one-command installer. Keep `script-opts/videoclip.conf` in place to retain preferences.
+
+## Troubleshooting
+
+- **`c` does nothing:** load a video first, restart mpv, and check that `scripts/videoclip/main.lua` exists in the active configuration directory. Another keybinding may be using `c`.
+- **Preferences will not save:** create `script-opts` using the folder-creation commands and check that you can write to it. Use the portable configuration path if applicable.
+- **FFmpeg is unavailable:** confirm `ffmpeg -version` works in your shell, then restart mpv.
+- **Upload fails:** check that `curl --version` works and try a smaller clip.
+
+To change the opening key, add a line to `input.conf` in the mpv configuration directory, replacing `c` with your preferred key:
+
+```text
 c script-binding videoclip-menu-open
 ```
 
-Other scripts or `input.conf` can drive videoclip without the menu:
+## Script messages
 
-```
-script-message videoclip-set-start
-script-message videoclip-set-end
+Other scripts can use these messages:
+
+```text
 script-message videoclip-set-start 12.5
 script-message videoclip-set-end 20
 script-message videoclip-reset
@@ -146,51 +190,28 @@ script-message videoclip-create-video-upload
 script-message videoclip-menu-open
 ```
 
-## Usage
+Omit the time argument to use the current playback position.
 
-- Open a file in mpv and press `c` to open the script menu.
-- Set the start point (`s`) and end point (`e`). If you set them in
-  the wrong order they are swapped automatically.
-- `[` / `]` seek to the start / end. `l` loops the selection for a preview.
-- Press `c` to create a video clip, `a` for audio, `x` to create and upload.
-  Shift+`c` / Shift+`x` force a 1080p-tall encode (ignored in stream-copy mode).
-- `k` toggles stream copy (lossless remux, cuts on keyframes).
-- `r` resets timings. Times are also cleared when you open a new file.
-  Creating a clip no longer wipes the current range.
+## Development
 
-It is possible to create silent videoclips.
-To do that, first mute audio in mpv.
-The default key binding is `m`.
-Muted playback will not create a silent *audio* clip; unmute first.
+Run the standalone tests from the repository root with either Lua or LuaJIT:
 
-With the mpv backend, visible subtitles are burned in when re-encoding.
-FFmpeg re-encoding requires subtitles and HDR-to-SDR conversion to be disabled.
-Toggle them off in mpv if you don't want any subtitles to be visible.
-The default key binding is `v`. Stream copy cannot burn in subtitles.
-
-Existing output files are not overwritten; a `-2`, `-3`, … suffix is added.
-Missing output folders are created automatically. mp4 outputs use `faststart`.
-
-Preferences use `1` for Video, `2` for Audio, and `3` for Upload/folders.
-Press a displayed setting key to change it; `Shift+` is shown explicitly.
-Hidden settings are inactive. `s` saves preferences and `Esc` returns to the main menu.
-
-Preferences also expose upstream's FFmpeg backend (`g`) and stream copy (`C`).
-Stream copy always uses FFmpeg. NVENC is available for mp4 re-encodes (`N` in preferences).
-WebM video always uses Opus audio; `audio_format` still controls audio-only clips.
-Fractional `video_fps` values such as `23.976` are preserved.
-
-## Running tests
-
-Run tests without mpv or a media file:
-
-```bash
+```sh
 lua tests/run.lua
+# Or:
 luajit tests/run.lua
 ```
 
-Run tests inside a real mpv instance with a local media file:
+This fork is based on [Ajatt-Tools/videoclip](https://github.com/Ajatt-Tools/videoclip). See [LICENSE](LICENSE) for license terms.
 
-```bash
-VIDEOCLIP_TEST=TRUE mpv --msg-level=all=no,videoclip=warn "/path/to/video.mkv"
+### Installer tests
+
+```sh
+python tests/installers.py
 ```
+
+These use local archive fixtures and temporary directories to check fresh installs, updates, preference preservation, backups, download failures, and Git checkout protection. PowerShell or shell cases are skipped when their runtime is unavailable.
+
+### GitHub Pages
+
+The public landing page and installers live in `docs/`. In repository **Settings → Pages**, publish from **master → /docs**. The `.nojekyll` file enables plain static hosting. Pushing changes to `docs/` updates the site.
