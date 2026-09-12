@@ -153,7 +153,7 @@ local function make_mpv_encoder(config, timings)
                 '--embeddedfonts=yes',
                 table.concat { '--sub-font=', self.config.sub_font },
                 table.concat { '--ovc=', self.config.video_codec },
-                table.concat { '--oac=', self.config.audio_codec },
+                table.concat { '--oac=', eutils.video_audio_codec(self.config) },
                 table.concat { '--start=', eutils.toms(self.timings['start']) },
                 table.concat { '--end=', eutils.toms(self.timings['end']) },
                 table.concat { '--aid=', mp.get_property("aid") }, -- track number
@@ -178,6 +178,9 @@ local function make_mpv_encoder(config, timings)
 
         args = self.append_video_filter_args(args)
         args = self.append_embed_subs_args(args)
+        if out_clip_path:lower():match('%.mp4$') then
+            table.insert(args, '--ofopts-add=movflags=+faststart')
+        end
 
         if self.config.video_codec == 'h264_nvenc' then
             local filtered = {}

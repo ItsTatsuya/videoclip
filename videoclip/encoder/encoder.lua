@@ -137,6 +137,10 @@ local function make_encoder()
         return this.mpv
     end
 
+    function pub.is_busy()
+        return this.busy == true
+    end
+
     local function stop_progress()
         this.busy = false
         if this.progress_timer then
@@ -175,7 +179,7 @@ local function make_encoder()
             return
         end
 
-        if not this.timings:validate() then
+        if not this.timings or not this.timings:validate() then
             h.notify_error("Wrong timings. Aborting.", "warn", 2)
             return
         end
@@ -194,6 +198,15 @@ local function make_encoder()
             h.notify("Stream copy cannot burn in subtitles. Subs will be omitted.", "warn", 3)
         end
 
+        if this.config.use_ffmpeg and not this.config.copy_streams and clip_type == 'video' then
+            local visible_subs = (mp.get_property_native('sub-visibility') and mp.get_property('sid', 'no') ~= 'no')
+                    or (mp.get_property_native('secondary-sub-visibility') and mp.get_property('secondary-sid', 'no') ~= 'no')
+            if visible_subs or this.config.hdr_to_sdr then
+                h.notify_error('FFmpeg cannot burn subtitles or convert HDR here. Use the mpv backend or disable those options.', 'warn', 5)
+                return
+            end
+        end
+
         local backend = pub.active_backend()
         local output_file_path = select(1, mk_output_args(backend, clip_type))
         output_file_path = h.unique_path(output_file_path)
@@ -202,6 +215,19 @@ local function make_encoder()
             args = backend.mkargs_video(output_file_path)
         else
             args = backend.mkargs_audio(output_file_path)
+        end
+
+        -- Build the retry now: later callbacks must not read changed playback state.
+        local cpu_args
+        if clip_type == 'video' and this.config.video_codec == 'h264_nvenc' and not this.config.copy_streams then
+            local cfg_mgr = require('config.config')
+            this.config.video_encoder = 'cpu'
+            cfg_mgr.set_encoding_settings(this.config)
+            local ok, result = pcall(backend.mkargs_video, output_file_path)
+            this.config.video_encoder = 'nvenc'
+            cfg_mgr.set_encoding_settings(this.config)
+            if not ok then error(result) end
+            cpu_args = result
         end
 
         mp.msg.info("Executing: %s", table.concat(h.quote_if_necessary(args), " "))
@@ -215,17 +241,9 @@ local function make_encoder()
         local function run_with_args(encode_args, tried_cpu_fallback)
             local process_result = function(_, ret, err)
                 if clip_result_failed(ret)
-                        and this.config.video_encoder == 'nvenc'
-                        and clip_type == 'video'
-                        and not this.config.copy_streams
+                        and cpu_args
                         and not tried_cpu_fallback then
                     h.notify("NVENC failed, retrying with CPU…", "warn", 3)
-                    this.config.video_encoder = 'cpu'
-                    local cfg_mgr = require("config.config")
-                    cfg_mgr.set_encoding_settings(this.config)
-                    local _, cpu_args = mk_output_args(pub.active_backend(), clip_type)
-                    this.config.video_encoder = 'nvenc'
-                    cfg_mgr.set_encoding_settings(this.config)
                     run_with_args(cpu_args, true)
                     return
                 end
@@ -237,14 +255,15 @@ local function make_encoder()
 
         start_progress(output_file_path)
         run_with_args(args, false)
+        return true
     end
 
     function pub.is_alive(encoder_name)
         --- Return true when the named encoder ("mpv" or "ffmpeg") can be executed.
         if encoder_name == "mpv" then
-            return this.mpv.is_alive()
+            return this.mpv ~= nil and this.mpv.is_alive()
         elseif encoder_name == "ffmpeg" then
-            return this.ffmpeg.is_alive()
+            return this.ffmpeg ~= nil and this.ffmpeg.is_alive()
         end
         error("unknown encoder name: " .. tostring(encoder_name))
     end

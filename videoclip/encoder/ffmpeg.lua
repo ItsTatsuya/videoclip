@@ -103,13 +103,14 @@ local function make_ffmpeg_encoder(config, timings)
         return args
     end
 
-    function self.append_audio_reencode_args(args)
+    function self.append_audio_reencode_args(args, video)
         --- Append audio re-encoding options matching the configured audio preferences.
         table.insert(args, '-c:a')
-        table.insert(args, self.config.audio_codec)
+        local codec = video and eutils.video_audio_codec(self.config) or self.config.audio_codec
+        table.insert(args, codec)
         table.insert(args, '-b:a')
         table.insert(args, self.config.audio_bitrate)
-        if self.config.audio_format == 'opus' then
+        if codec == 'libopus' then
             table.insert(args, '-application')
             table.insert(args, 'voip')
             table.insert(args, '-compression_level')
@@ -135,6 +136,10 @@ local function make_ffmpeg_encoder(config, timings)
         table.insert(args, '-avoid_negative_ts')
         table.insert(args, 'make_zero')
         args = self.append_common_output_args(args)
+        if out_clip_path:lower():match('%.mp4$') then
+            table.insert(args, '-movflags')
+            table.insert(args, '+faststart')
+        end
         table.insert(args, out_clip_path)
         return args
     end
@@ -149,10 +154,14 @@ local function make_ffmpeg_encoder(config, timings)
         else
             table.insert(args, '-map')
             table.insert(args, self.selected_audio_map())
-            args = self.append_audio_reencode_args(args)
+            args = self.append_audio_reencode_args(args, true)
         end
         args = self.append_video_reencode_args(args)
         args = self.append_common_output_args(args)
+        if out_clip_path:lower():match('%.mp4$') then
+            table.insert(args, '-movflags')
+            table.insert(args, '+faststart')
+        end
         table.insert(args, out_clip_path)
         return args
     end
@@ -315,7 +324,7 @@ local function test_reencode_mode(source_path, video_map, audio_map)
             AUDIO_ENCODE_ARGS,
             video_encode_args(nil),
             VIDEO_OUTPUT_ARGS,
-            { '/tmp/out.mp4' }
+            { '-movflags', '+faststart', '/tmp/out.mp4' }
     ))
 
     -- Video, re-encode, muted.
@@ -326,7 +335,7 @@ local function test_reencode_mode(source_path, video_map, audio_map)
                     { '-map', video_map, '-an' },
                     video_encode_args(nil),
                     VIDEO_OUTPUT_ARGS,
-                    { '/tmp/out.mp4' }
+                    { '-movflags', '+faststart', '/tmp/out.mp4' }
             )
     )
 
@@ -341,7 +350,7 @@ local function test_reencode_mode(source_path, video_map, audio_map)
             AUDIO_ENCODE_ARGS,
             video_encode_args(60),
             VIDEO_OUTPUT_ARGS,
-            { '/tmp/out.mp4' }
+            { '-movflags', '+faststart', '/tmp/out.mp4' }
     ))
 
     -- Audio, re-encode.

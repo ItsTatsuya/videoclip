@@ -92,13 +92,13 @@ end
 
 local function normalize_video_fps(video_fps)
     --- Return a safe video_fps value. "auto" keeps the input video's source FPS.
-    --- Numeric values are truncated to whole numbers; anything else falls back.
+    --- Positive finite numeric values retain fractional frame rates.
     --- Examples:
     ---    "auto" → "auto"
     ---    "60" → 60
     ---    60 → 60
-    ---    "60.5" → 60
-    ---    "23.976" → 23
+    ---    "60.5" → 60.5
+    ---    "23.976" → 23.976
     ---    "abc" → 30 (fallback)
     ---    "0" → 30 (fallback)
     if video_fps == 'auto' then
@@ -110,8 +110,7 @@ local function normalize_video_fps(video_fps)
         return FALLBACK_VIDEO_FPS
     end
 
-    numeric_video_fps = math.floor(numeric_video_fps)
-    if numeric_video_fps < 1 then
+    if numeric_video_fps ~= numeric_video_fps or numeric_video_fps == math.huge or numeric_video_fps < 1 then
         return FALLBACK_VIDEO_FPS
     end
     return numeric_video_fps
@@ -273,10 +272,10 @@ function this.run_tests()
     test_video_fps('60', 60)
     test_video_fps(60, 60)
     test_video_fps('auto', 'auto')
-    -- Fractional values are truncated to whole numbers.
-    test_video_fps('60.5', 60)
+    -- Fractional values are preserved.
+    test_video_fps('60.5', 60.5)
     test_video_fps('30.0', 30)
-    test_video_fps('23.976', 23)
+    test_video_fps('23.976', 23.976)
     -- Invalid values fall back to FALLBACK_VIDEO_FPS.
     for _, invalid_fps in ipairs({ '', 'abc', '0', '-1', '0.5' }) do
         test_video_fps(invalid_fps, FALLBACK_VIDEO_FPS)

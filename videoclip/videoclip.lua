@@ -22,6 +22,7 @@ local config = cfg_mgr.read_config_file()
 local encoder = make_encoder.new()
 local main_menu
 local pref_menu
+local active_menu
 
 local CATBOX_MAX_BYTES = 200 * 1024 * 1024
 local utils = require('mp.utils')
@@ -30,15 +31,20 @@ local utils = require('mp.utils')
 -- Utility functions
 
 local function force_resolution(width, height, clip_fn, ...)
+    if config.copy_streams then
+        h.notify_error('Switch to re-encode mode with k to resize a clip.', 'warn', 3)
+        return
+    end
     local cached_prefs = {
         video_width = config.video_width,
         video_height = config.video_height,
     }
     config.video_width = width
     config.video_height = height
-    clip_fn(...)
+    local ok, err = pcall(clip_fn, ...)
     config.video_width = cached_prefs.video_width
     config.video_height = cached_prefs.video_height
+    if not ok then error(err) end
 end
 
 local function upload_to_catbox(outfile)
@@ -160,27 +166,69 @@ function Menu:binding_name(key)
 end
 
 function Menu:overlay_draw(text)
-    self.overlay.data = text
+    local lines, longest, line_units = {}, 1, 0
+    for line in (text .. '\\N'):gmatch('(.-)\\N') do
+        lines[#lines + 1] = line
+        line_units = line_units + (line == '' and 0.35 or 1.15)
+        local cell_index = 0
+        for cell in (line .. '\t'):gmatch('(.-)\t') do
+            local plain = cell:gsub('{[^}]*}', ''):gsub('\\h', ' ')
+            local length = 0
+            for _ in plain:gmatch('[%z\1-\127\194-\244]') do length = length + 1 end
+            local offset = cell_index == 0 and 0 or cell_index == 1 and 5.6 or 16
+            longest = math.max(longest, length + offset / 0.55)
+            cell_index = cell_index + 1
+        end
+    end
+    local screen_w, screen_h = 1280, 720
+    if mp.get_osd_size then screen_w, screen_h = mp.get_osd_size() end
+    if not screen_w or not screen_h or screen_w <= 0 or screen_h <= 0 then screen_w, screen_h = 1280, 720 end
+    local canvas_w = 720 * (screen_w or 1280) / math.max(1, screen_h or 720)
+    local size = math.max(1, math.min(config.font_size * 0.85, 650 / line_units, (canvas_w - 64) / (longest * 0.55)))
+    local width = math.min(canvas_w - 24, longest * size * 0.55 + 32)
+    local height = line_units * size + 24
+    local align = tonumber(config.osd_align) or 7
+    local column, band = (align - 1) % 3, math.floor((align - 1) / 3)
+    local x = column == 0 and 12 or column == 1 and (canvas_w - width) / 2 or canvas_w - width - 12
+    local y = band == 2 and 12 or band == 1 and (720 - height) / 2 or 708 - height
+    -- Blur only the backdrop drawing; text stays crisp in separate ASS events.
+    local events = { string.format('{\\an7\\pos(%.2f,%.2f)\\bord0\\shad0\\blur8\\1c&H101010&\\1a&H90&\\p1}m 0 0 l %.2f 0 %.2f %.2f 0 %.2f{\\p0}', x + 6, y + 6, width - 12, width - 12, height - 12, height - 12) }
+    local line_y = y + 12
+    for _, line in ipairs(lines) do
+        local cell_index = 0
+        for cell in (line .. '\t'):gmatch('(.-)\t') do
+            local offset = cell_index == 0 and 0 or cell_index == 1 and size * 5.6 or size * 16
+            cell = cell:gsub('{\\fs[^}]+}', ''):gsub('{\\an%d}', '')
+            events[#events + 1] = string.format('{\\an7\\pos(%.2f,%.2f)\\fs%.2f\\bord0.6\\shad0\\1c&HFFFFFF&}%s', x + 16 + offset, line_y, size, cell)
+            cell_index = cell_index + 1
+        end
+        line_y = line_y + size * (line == '' and 0.35 or 1.15)
+    end
+    self.overlay.res_x, self.overlay.res_y = canvas_w, 720
+    self.overlay.data = table.concat(events, '\n')
     self.overlay:update()
 end
 
 function Menu:open()
-    if self.parent then
-        self.parent:close()
-    end
+    if active_menu and active_menu ~= self then active_menu:close(true) end
+    active_menu = self
     self.open_state = true
     for _, val in pairs(self.keybindings) do
-        mp.add_forced_key_binding(val.key, self:binding_name(val.key), val.fn)
+        local binding = val
+        mp.add_forced_key_binding(binding.key, self:binding_name(binding.key), function()
+            if self.open_state and (not self.visible_keys or self.visible_keys[binding.key]) then binding.fn() end
+        end)
     end
     self:update()
 end
 
-function Menu:close()
+function Menu:close(switching)
     self.open_state = false
     for _, val in pairs(self.keybindings) do
         mp.remove_key_binding(self:binding_name(val.key))
     end
-    if self.parent then
+    if active_menu == self then active_menu = nil end
+    if self.parent and not switching then
         self.parent:open()
     else
         self.overlay:remove()
@@ -232,7 +280,7 @@ main_menu.keybindings = {
         main_menu:create_clip('video')
     end },
     { key = 'C', fn = function()
-        force_resolution(1920, -2, main_menu.create_clip, main_menu, 'video')
+        force_resolution(-2, 1080, main_menu.create_clip, main_menu, 'video')
     end },
     { key = 'a', fn = function()
         main_menu:create_clip('audio')
@@ -241,7 +289,7 @@ main_menu.keybindings = {
         main_menu:create_clip('video', upload_video)
     end },
     { key = 'X', fn = function()
-        force_resolution(1920, -2, main_menu.create_clip, main_menu, 'video', upload_video)
+        force_resolution(-2, 1080, main_menu.create_clip, main_menu, 'video', upload_video)
     end },
     { key = 'p', fn = function()
         pref_menu:open()
@@ -313,48 +361,57 @@ main_menu.open = function()
     Menu.open(main_menu)
 end
 
+local function menu_time(seconds)
+    if seconds < 0 or seconds ~= seconds or seconds == math.huge then return '—' end
+    local ms = math.floor(seconds * 1000 + 0.5)
+    return string.format('%02d:%02d.%03d', math.floor(ms / 60000), math.floor(ms / 1000) % 60, ms % 1000)
+end
+
 function main_menu:update()
+    if not self.open_state then return end
     local osd = OSD:new():config(config)
-    if not config.use_ffmpeg and not config.copy_streams and not encoder.is_alive("mpv") then
-        osd:red("Error: "):append("mpv is not found in the PATH."):newline()
-    end
-    if (config.use_ffmpeg or config.copy_streams) and not encoder.is_alive("ffmpeg") then
-        osd:red("Error: "):append("ffmpeg is not found in the PATH. FFmpeg encoder is unavailable."):newline()
-    end
-    osd:submenu('Timings '):italics('(+shift use sub timings)'):newline()
-    osd:tab():item('s: '):append('start time '):item(h.human_readable_time(self.timings['start'])):newline()
-    osd:tab():item('e: '):append('end time '):item(h.human_readable_time(self.timings['end'])):newline()
-    osd:tab():item('[: '):append('seek to start'):newline()
-    osd:tab():item(']: '):append('seek to end'):newline()
-    osd:tab():item('l: '):append(preview_loop_active() and 'clear preview loop' or 'preview loop'):newline()
-    osd:tab():item('r: '):append('reset'):newline()
-    osd:submenu('Create clip '):italics('(+shift to force fullHD preset)'):newline()
-    if config.copy_streams then
-        osd:tab():append("stream copy (lossless, keyframe-accurate)"):newline()
-    end
-    osd:tab():item('c: '):append('video clip'):newline()
-    osd:tab():item('a: '):append('audio clip'):newline()
-    osd:tab():item('x: '):append('video clip to ' .. fmt_upload_dest()):newline()
-    osd:tab():item('k: '):append('stream copy: '):append(config.copy_streams and 'yes' or 'no'):newline()
-
-    osd:submenu('Options '):newline()
-    osd:tab():item('p: '):append('Open preferences'):newline()
-    osd:tab():item('ESC: '):append('Close'):newline()
-
+    local ready = self.timings:validate()
+    osd:submenu('Videoclip'):newline()
+    self.last_busy = encoder.is_busy()
+    if encoder.is_busy() then osd:append('Encoding…')
+    elseif ready then osd:selected('Range ready')
+    elseif self.timings.start < 0 then osd:append('Press s to set the start')
+    elseif self.timings['end'] < 0 then osd:append('Press e to set the end')
+    else osd:append('End must be after start') end
+    osd:newline():append('Start: '):bold(menu_time(self.timings['start'])):append('    End: '):bold(menu_time(self.timings['end']))
+    if ready then osd:newline():hint(string.format('Duration: %.3f seconds', self.timings:duration())) end
+    osd:newline()
+    local backend = (config.use_ffmpeg or config.copy_streams) and 'ffmpeg' or 'mpv'
+    if not encoder.is_alive(backend) then osd:red(backend .. ' is unavailable.'):newline() end
+    osd:newline():submenu('Selection'):newline()
+    osd:tab():item('s / e: '):append('Set start / end'):newline()
+    osd:tab():item('Shift+s / Shift+e: '):append('Use subtitle times'):newline()
+    osd:tab():item('[ / ]: '):append('Go to start / end'):newline()
+    osd:tab():item('l: '):append(preview_loop_active() and 'Stop preview loop' or 'Preview loop')
+        :append('    '):item('r: '):append('Reset'):newline()
+    osd:newline():submenu('Export'):newline()
+    osd:tab():item('c: '):append('Save video    '):item('a: '):append('Save audio'):newline()
+    osd:tab():item('x: '):append('Upload to ' .. (config.custom_upload_command ~= '' and 'custom host' or config.litterbox and 'Litterbox' or 'Catbox')):newline()
+    if not config.copy_streams then osd:tab():item('Shift+c / Shift+x: '):append('Export at 1080p'):newline() end
+    osd:tab():item('k: '):append('Mode: ' .. (config.copy_streams and 'Stream copy' or 'Re-encode')):newline()
+    osd:newline():item('p: '):append('Preferences    '):item('Esc: '):append('Close')
     self:overlay_draw(osd:get_text())
 end
 
 function main_menu:create_clip(clip_type, on_complete_fn)
-    self:close()
-    encoder.create_clip(clip_type, on_complete_fn)
+    if encoder.create_clip(clip_type, on_complete_fn) then self:close() end
 end
 
 ------------------------------------------------------------
 -- Preferences
 
 pref_menu = Menu:new(main_menu)
+pref_menu.page = 'Video'
 
 pref_menu.keybindings = {
+    { key = '1', fn = function() pref_menu.page = 'Video'; pref_menu:update() end },
+    { key = '2', fn = function() pref_menu.page = 'Audio'; pref_menu:update() end },
+    { key = '3', fn = function() pref_menu.page = 'Upload'; pref_menu:update() end },
     { key = 'f', fn = function()
         pref_menu:cycle_video_formats()
     end },
@@ -473,6 +530,8 @@ for i, quality in ipairs(pref_menu.video_qualities) do
 end
 
 function pref_menu:get_selected_resolution()
+    if config.video_width == -2 and config.video_height == -2 then return 'Source size' end
+    if config.video_width == -2 then return config.video_height .. 'p' end
     return string.format(
             '%s x %s',
             config.video_width == -2 and 'auto' or config.video_width,
@@ -539,7 +598,9 @@ function pref_menu:toggle_mute_audio()
 end
 
 function pref_menu:toggle_embed_subtitles()
-    mp.commandv("cycle", "sub-visibility")
+    local visible = mp.get_property('sub-visibility') == 'yes' or mp.get_property('secondary-sub-visibility') == 'yes'
+    mp.set_property('sub-visibility', visible and 'no' or 'yes')
+    mp.set_property('secondary-sub-visibility', visible and 'no' or 'yes')
     self:update()
 end
 
@@ -625,42 +686,78 @@ end
 
 function pref_menu:update()
     local osd = OSD:new():config(config)
+    self.visible_keys = { ['1'] = true, ['2'] = true, ['3'] = true, s = true, ESC = true, q = true }
+    local function row(key, label, value)
+        self.visible_keys[key] = true
+        local display_key = key:match('^%u$') and 'Shift+' .. key:lower() or key
+        osd:item(display_key):append('\t'):append(label)
+        if value ~= nil then osd:append('\t'):append(value) end
+        osd:newline()
+    end
+    local function section(label)
+        osd:newline():submenu(label):newline()
+    end
     osd:submenu('Preferences'):newline()
-    osd:tab():item('r: Video resolution: '):append(self:get_selected_resolution()):newline()
-    osd:tab():item('b: Video bitrate: '):append(config.video_bitrate):newline()
-    osd:tab():item('f: Video format: '):append(config.video_format):newline()
-    if config.video_format == 'mp4' then
-        osd:tab():item('N: Video encoder: '):append(config.video_encoder):newline()
+    for i, page in ipairs({ 'Video', 'Audio', 'Upload' }) do
+        local label = i .. ' ' .. page
+        if self.page == page then osd:selected('[' .. label .. ']') else osd:muted(label) end
+        osd:append('    ')
+    end
+    osd:newline()
+    if self.page ~= 'Upload' then row('C', 'Mode', config.copy_streams and 'Stream copy' or 'Re-encode') end
+    if self.page == 'Video' then
+        if config.copy_streams then
+            osd:tab():append('Original streams · keyframe cuts · no subtitle burning'):newline()
+        else
+            row('g', 'Backend', config.use_ffmpeg and 'FFmpeg' or 'mpv')
+            section('Video')
+            row('f', 'Format', config.video_format == 'mp4' and 'MP4 (H.264)' or 'WebM (' .. config.video_format:upper() .. ')')
+            row('r', 'Resolution', self:get_selected_resolution())
+            row('F', 'Frame rate', config.video_fps == 'auto' and 'Source' or config.video_fps)
+            if config.video_format == 'mp4' then row('N', 'Encoder', config.video_encoder == 'nvenc' and 'NVIDIA GPU' or 'CPU') end
+            row('Q', 'Quality', config.video_quality)
+            osd:hint('Lower quality values give more detail.'):newline()
+            if self:nvenc_active() then
+                row('P', 'NVENC preset', config.nvenc_preset)
+                row('T', 'NVENC tune', config.nvenc_tune)
+            else
+                row('b', 'Bitrate', config.video_bitrate)
+                if config.video_format == 'mp4' then row('P', 'Preset', config.preset) end
+            end
+            row('h', 'HDR to SDR', config.hdr_to_sdr and 'On' or 'Off')
+        end
+        if not config.copy_streams then
+            section('Subtitles')
+            local visible = mp.get_property('sub-visibility') == 'yes' or mp.get_property('secondary-sub-visibility') == 'yes'
+            row('e', 'Subtitles', visible and 'On' or 'Off')
+            osd:hint('Also changes subtitles during playback.'):newline()
+            if config.use_ffmpeg then osd:hint('Subtitles / HDR: press g to use mpv.'):newline() end
+        end
+    elseif self.page == 'Audio' then
+        section('Audio')
+        row('m', 'Mute audio', mp.get_property('mute') == 'yes' and 'On' or 'Off')
+        if mp.get_property('mute') == 'yes' then osd:hint('Unmute to save an audio clip.'):newline() end
+        if not config.copy_streams then
+            row('a', 'Audio format', config.audio_format)
+            row('B', 'Audio bitrate', config.audio_bitrate)
+            osd:hint('Applies to audio clips and MP4 video.'):newline()
+            if config.video_format ~= 'mp4' then osd:hint('WebM video uses Opus.'):newline() end
+        else
+            osd:tab():append('Copy mode keeps the original audio codec.'):newline()
+        end
     else
-        osd:tab():color("b0b0b0"):text('N: Video encoder: '):append("N/A (mp4 only)"):newline()
+        section('Upload')
+        if config.custom_upload_command ~= '' then
+            osd:tab():append('Custom upload command'):newline()
+        else
+            row('x', 'Destination', config.litterbox and 'Litterbox' or 'Catbox')
+            if config.litterbox then row('z', 'Expires after', config.litterbox_expire) end
+        end
+        section('Folders')
+        osd:tab():append('Video · '):append(h.ass_escape(h.ellipsize_middle(config.video_folder_path:gsub('\\', '/'), 48))):newline()
+        osd:tab():append('Audio · '):append(h.ass_escape(h.ellipsize_middle(config.audio_folder_path:gsub('\\', '/'), 48))):newline()
     end
-    if self:nvenc_active() and not config.copy_streams then
-        osd:tab():item('P: NVENC preset: '):append(config.nvenc_preset):newline()
-        osd:tab():item('T: NVENC tune: '):append(config.nvenc_tune):newline()
-    elseif not config.copy_streams then
-        osd:tab():item('P: Encoder preset: '):append(config.preset):newline()
-    end
-    osd:tab():item('Q: Quality (CRF/CQ): '):append(tostring(config.video_quality)):newline()
-    osd:tab():item('F: FPS: '):append(tostring(config.video_fps)):newline()
-    osd:tab():item('a: Audio format: '):append(config.audio_format):append(' (audio clips)'):newline()
-    osd:tab():item('B: Audio bitrate: '):append(config.audio_bitrate):newline()
-    osd:tab():item('g: Use FFmpeg: '):append(config.use_ffmpeg and 'yes' or 'no'):newline()
-    osd:tab():item('C: Copy streams: '):append(config.copy_streams and 'yes' or 'no'):newline()
-    osd:tab():item('h: HDR to SDR: '):append(config.hdr_to_sdr and 'yes' or 'no'):newline()
-    osd:tab():item('m: Mute audio: '):append(mp.get_property("mute")):newline()
-    osd:tab():item('e: Embed subtitles: '):append(mp.get_property("sub-visibility")):newline()
-    osd:submenu('Folders'):newline()
-    osd:tab():append('Video: '):append(h.ass_escape(h.ellipsize_middle(config.video_folder_path, 48))):newline()
-    osd:tab():append('Audio: '):append(h.ass_escape(h.ellipsize_middle(config.audio_folder_path, 48))):newline()
-    osd:submenu('Catbox'):newline()
-    osd:tab():item('x: Using: '):append(config.litterbox and 'Litterbox (temporary)' or 'Catbox (permanent)'):newline()
-    if config.litterbox then
-        osd:tab():item('z: Litterbox expires after: '):append(config.litterbox_expire):newline()
-    else
-        osd:tab():color("b0b0b0"):text('z: Litterbox expires after: '):append("N/A"):newline()
-    end
-    osd:submenu('Save'):newline()
-    osd:tab():item('s: Save preferences'):newline()
+    osd:newline():item('s: '):append('Save    '):item('Esc: '):append('Back')
     self:overlay_draw(osd:get_text())
 end
 
@@ -723,7 +820,7 @@ end)()
 local function message_set_time(property, value)
     if value ~= nil and value ~= "" then
         local n = tonumber(value)
-        if not n then
+        if not n or n ~= n or n == math.huge or n == -math.huge then
             h.notify_error("Invalid time: " .. tostring(value), "warn", 2)
             return
         end
@@ -766,4 +863,9 @@ mp.register_event("file-loaded", function()
     if main_menu.open_state then
         main_menu:update()
     end
+end)
+
+-- Refresh a reopened menu when an asynchronous encode finishes.
+mp.add_periodic_timer(0.5, function()
+    if main_menu.open_state and main_menu.last_busy ~= encoder.is_busy() then main_menu:update() end
 end)

@@ -166,7 +166,7 @@ local mp_options_stub = {
 local mp_utils_stub = {
     format_json = format_json,
     join_path = function(parent, child)
-        return parent .. '/' .. child
+        return parent:gsub('/+$', '') .. '/' .. child
     end,
     split_path = function(path)
         local dir, file = path:match("^(.*/)(.*)")

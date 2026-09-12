@@ -31,4 +31,5 @@ print("Running encoder facade tests...")
 encoder.run_tests()
 print("encoder facade tests passed.")
 
+require('tests.regressions')
 print("ALL TESTS PASSED")

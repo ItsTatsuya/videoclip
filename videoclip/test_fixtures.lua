@@ -221,6 +221,7 @@ function this.expected_video_args(opts)
     table.insert(args, '--vf-add=format=yuv420p')
     args = append_expected_external_subs_args(args)
     table.insert(args, '--sub-back-color=#00000000')
+    table.insert(args, '--ofopts-add=movflags=+faststart')
     return args
 end
 

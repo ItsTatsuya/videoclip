@@ -89,6 +89,14 @@ function OSD:selected(text)
     return self:color('48a868'):bold(text):color('ffffff')
 end
 
+function OSD:muted(text)
+    return self:color('b4bbc5'):append(text):color('ffffff')
+end
+
+function OSD:hint(text)
+    return self:append('{\\fscx82\\fscy82}'):muted(text):append('{\\fscx100\\fscy100}')
+end
+
 function OSD:red(text)
     return self:color('ff0000'):bold(text):color('ffffff')
 end

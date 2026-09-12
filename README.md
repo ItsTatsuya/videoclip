@@ -163,15 +163,22 @@ To do that, first mute audio in mpv.
 The default key binding is `m`.
 Muted playback will not create a silent *audio* clip; unmute first.
 
-If a video has visible subtitles, they will be burned in when re-encoding.
+With the mpv backend, visible subtitles are burned in when re-encoding.
+FFmpeg re-encoding requires subtitles and HDR-to-SDR conversion to be disabled.
 Toggle them off in mpv if you don't want any subtitles to be visible.
 The default key binding is `v`. Stream copy cannot burn in subtitles.
 
 Existing output files are not overwritten; a `-2`, `-3`, … suffix is added.
 Missing output folders are created automatically. mp4 outputs use `faststart`.
 
+Preferences use `1` for Video, `2` for Audio, and `3` for Upload/folders.
+Press a displayed setting key to change it; `Shift+` is shown explicitly.
+Hidden settings are inactive. `s` saves preferences and `Esc` returns to the main menu.
+
 Preferences also expose upstream's FFmpeg backend (`g`) and stream copy (`C`).
 Stream copy always uses FFmpeg. NVENC is available for mp4 re-encodes (`N` in preferences).
+WebM video always uses Opus audio; `audio_format` still controls audio-only clips.
+Fractional `video_fps` values such as `23.976` are preserved.
 
 ## Running tests
 

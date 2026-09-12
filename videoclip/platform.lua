@@ -56,7 +56,8 @@ this.open = function(file_or_url)
 end
 
 local function copy_via_mpv(text)
-    return pcall(mp.set_property, "clipboard/text", text)
+    local ok, result = pcall(mp.set_property, "clipboard/text", text)
+    return ok and result == true
 end
 
 this.clipboard = (function()

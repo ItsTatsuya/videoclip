@@ -11,6 +11,11 @@ local utils = require('mp.utils')
 
 local this = {}
 
+-- Audio-only preferences must not select an unsupported codec for WebM video.
+function this.video_audio_codec(config)
+    return config.video_extension == '.webm' and 'libopus' or config.audio_codec
+end
+
 --- Trim timestamp down to milliseconds.
 --- Examples:
 ---    1 → "1.000"
