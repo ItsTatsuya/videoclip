@@ -127,7 +127,9 @@ function this.video_filter_chain(config)
     if config.video_fps ~= 'auto' then
         table.insert(filters, table.concat { 'fps=', config.video_fps })
     end
-    table.insert(filters, 'format=yuv420p')
+    local pixel_format = (config.video_codec == 'h264_qsv' or config.video_codec == 'h264_amf')
+            and 'nv12' or 'yuv420p'
+    table.insert(filters, 'format=' .. pixel_format)
     return filters
 end
 

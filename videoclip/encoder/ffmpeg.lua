@@ -90,6 +90,17 @@ local function make_ffmpeg_encoder(config, timings)
             table.insert(args, self.config.nvenc_preset or 'p5')
             table.insert(args, '-tune')
             table.insert(args, self.config.nvenc_tune or 'hq')
+        elseif self.config.video_codec == 'h264_amf' then
+            for _, arg in ipairs({ '-rc', 'cqp', '-qp_i', tostring(self.config.video_quality),
+                    '-qp_p', tostring(self.config.video_quality), '-qp_b', tostring(self.config.video_quality),
+                    '-quality', 'balanced' }) do
+                table.insert(args, arg)
+            end
+        elseif self.config.video_codec == 'h264_qsv' then
+            for _, arg in ipairs({ '-global_quality', tostring(math.max(1, self.config.video_quality)),
+                    '-preset', 'medium', '-look_ahead', '0' }) do
+                table.insert(args, arg)
+            end
         else
             table.insert(args, '-b:v')
             table.insert(args, self.config.video_bitrate)

@@ -510,7 +510,7 @@ pref_menu.video_bitrates = {
 }
 
 pref_menu.vid_formats = { 'mp4', 'vp9', 'vp8', }
-pref_menu.vid_encoders = { 'cpu', 'nvenc', }
+pref_menu.vid_encoders = { 'cpu', 'gpu' }
 pref_menu.nvenc_presets = { 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', }
 pref_menu.nvenc_tunes = { 'hq', 'll', 'ull', 'lossless', }
 pref_menu.video_qualities = { 15, 18, 20, 23, 26, 28, 32, 35, selected = 1, }
@@ -620,10 +620,10 @@ end
 
 function pref_menu:cycle_video_encoders()
     if config.video_format ~= 'mp4' then
-        h.notify_error("NVENC is only available for mp4 (H.264).", "warn", 2)
+        h.notify_error("Hardware encoding is only available for mp4 (H.264).", "warn", 2)
         return
     end
-    config.video_encoder = h.next_in_list(self.vid_encoders, config.video_encoder)
+    config.video_encoder = config.video_encoder == 'cpu' and 'gpu' or 'cpu'
     cfg_mgr.set_encoding_settings(config)
     self:update()
 end
@@ -631,7 +631,7 @@ end
 function pref_menu:cycle_preset()
     if self:nvenc_active() then
         config.nvenc_preset = h.next_in_list(self.nvenc_presets, config.nvenc_preset)
-    else
+    elseif config.video_format ~= 'mp4' or config.video_encoder == 'cpu' then
         config.preset = h.next_in_list(self.preset_list, config.preset)
     end
     self:update()
@@ -714,13 +714,13 @@ function pref_menu:update()
             row('f', 'Format', config.video_format == 'mp4' and 'MP4 (H.264)' or 'WebM (' .. config.video_format:upper() .. ')')
             row('r', 'Resolution', self:get_selected_resolution())
             row('F', 'Frame rate', config.video_fps == 'auto' and 'Source' or config.video_fps)
-            if config.video_format == 'mp4' then row('N', 'Encoder', config.video_encoder == 'nvenc' and 'NVIDIA GPU' or 'CPU') end
+            if config.video_format == 'mp4' then row('N', 'Encoder', config.video_encoder == 'cpu' and 'CPU' or 'GPU (Auto)') end
             row('Q', 'Quality', config.video_quality)
             osd:hint('Lower quality values give more detail.'):newline()
             if self:nvenc_active() then
                 row('P', 'NVENC preset', config.nvenc_preset)
                 row('T', 'NVENC tune', config.nvenc_tune)
-            else
+            elseif config.video_format ~= 'mp4' or config.video_encoder == 'cpu' then
                 row('b', 'Bitrate', config.video_bitrate)
                 if config.video_format == 'mp4' then row('P', 'Preset', config.preset) end
             end

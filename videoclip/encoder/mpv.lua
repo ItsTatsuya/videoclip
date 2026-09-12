@@ -182,18 +182,31 @@ local function make_mpv_encoder(config, timings)
             table.insert(args, '--ofopts-add=movflags=+faststart')
         end
 
-        if self.config.video_codec == 'h264_nvenc' then
+        if self.config.video_codec == 'h264_nvenc' or self.config.video_codec == 'h264_amf'
+                or self.config.video_codec == 'h264_qsv' then
             local filtered = {}
             for _, arg in ipairs(args) do
                 if not arg:match('^%-%-ovcopts%-add=') then
                     table.insert(filtered, arg)
                 end
             end
-            table.insert(filtered, '--ovcopts-add=rc=vbr')
-            table.insert(filtered, '--ovcopts-add=cq=' .. tostring(self.config.video_quality))
-            table.insert(filtered, '--ovcopts-add=b=0')
-            table.insert(filtered, '--ovcopts-add=preset=' .. tostring(self.config.nvenc_preset or 'p5'))
-            table.insert(filtered, '--ovcopts-add=tune=' .. tostring(self.config.nvenc_tune or 'hq'))
+            if self.config.video_codec == 'h264_amf' then
+                table.insert(filtered, '--ovcopts-add=rc=cqp')
+                table.insert(filtered, '--ovcopts-add=quality=balanced')
+                for _, frame in ipairs({ 'i', 'p', 'b' }) do
+                    table.insert(filtered, '--ovcopts-add=qp_' .. frame .. '=' .. tostring(self.config.video_quality))
+                end
+            elseif self.config.video_codec == 'h264_qsv' then
+                table.insert(filtered, '--ovcopts-add=global_quality=' .. tostring(math.max(1, self.config.video_quality)))
+                table.insert(filtered, '--ovcopts-add=preset=medium')
+                table.insert(filtered, '--ovcopts-add=look_ahead=0')
+            else
+                table.insert(filtered, '--ovcopts-add=rc=vbr')
+                table.insert(filtered, '--ovcopts-add=cq=' .. tostring(self.config.video_quality))
+                table.insert(filtered, '--ovcopts-add=b=0')
+                table.insert(filtered, '--ovcopts-add=preset=' .. tostring(self.config.nvenc_preset or 'p5'))
+                table.insert(filtered, '--ovcopts-add=tune=' .. tostring(self.config.nvenc_tune or 'hq'))
+            end
             args = filtered
         end
 

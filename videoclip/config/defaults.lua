@@ -21,8 +21,9 @@ this.get_default = function()
         -- Use the slowest preset that you have patience for.
         -- https://trac.ffmpeg.org/wiki/Encode/H.264
         preset = 'faster',
-        -- Video encoder: cpu (libx264) or nvenc (h264_nvenc, NVIDIA GPU).
-        -- NVENC only applies when video_format=mp4.
+        -- Video encoder: cpu (libx264) or gpu (automatically selects NVIDIA, AMD or Intel).
+        -- Hardware encoding only applies when video_format=mp4; requires a supported GPU, driver and encoder build.
+        -- Unavailable hardware encoders retry with CPU. Quality values are not equivalent across encoders.
         video_encoder = 'cpu',
         nvenc_preset = 'p5',
         nvenc_tune = 'hq',

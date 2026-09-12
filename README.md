@@ -2,7 +2,7 @@
 
 Save video and audio clips directly from mpv. Set a start and end time, preview the selection, then save locally or upload to Catbox/Litterbox.
 
-- Video: MP4 or WebM, with CPU or NVIDIA NVENC encoding.
+- Video: MP4 or WebM, with CPU encoding or automatic NVIDIA, AMD, and Intel GPU encoding for MP4.
 - Audio: AAC (`.m4a`), Opus, or MP3.
 - Stream copy: keep the original streams without re-encoding; cuts depend on keyframes.
 - Keyboard menus for video, audio, and upload preferences.
@@ -150,7 +150,9 @@ video_encoder=cpu
 
 - **Subtitles / HDR:** use the mpv backend. FFmpeg re-encoding requires visible subtitles and HDR conversion to be disabled.
 - **WebM:** video exports use Opus audio. Audio-only exports and MP4 video use your audio format preference.
-- **NVENC:** available for MP4 with a compatible NVIDIA GPU. Failed NVENC exports retry using the CPU.
+- **CPU / GPU:** for MP4 (H.264), press **N** (`Shift+n`) on the Video preferences page to toggle **CPU** and **GPU (Auto)**, or set `video_encoder=gpu` in the config. CPU remains the default.
+- **Automatic GPU selection:** works with both the mpv and FFmpeg backends. GPU mode tries NVIDIA NVENC, AMD AMF, then Intel Quick Sync by attempting the export. It remembers the first successful encoder separately for each backend during the current session. If that encoder later fails, it tries the other GPU encoders; if all fail, it retries with CPU. Initial detection can take extra time.
+- **GPU requirements:** compatible hardware, drivers, and an mpv/FFmpeg build containing the corresponding encoder are required. GPU mode applies to MP4 re-encoding; WebM uses CPU and stream copy does not encode. Quality values are not directly comparable across encoders. Older `nvenc`, `amf`, and `qsv` config selections load as `gpu`; save preferences to write the updated setting.
 - **Stream copy:** requires FFmpeg; preserves codecs and ignores resize/quality options. Subtitles are omitted.
 - **Mute:** mute playback for silent video. Unmute before exporting an audio-only clip.
 - **Uploads:** `x` sends the clip to the selected service. Litterbox is temporary; Catbox is permanent. Change the destination in preferences.
@@ -198,9 +200,12 @@ Run the standalone tests from the repository root with either Lua or LuaJIT:
 
 ```sh
 lua tests/run.lua
+lua tests/hardware_encoding.lua
 # Or:
 luajit tests/run.lua
 ```
+
+The hardware encoding tests simulate encoder success and failure to check automatic selection, caching, and CPU fallback for both backends; they do not require a GPU. Actual hardware encoding must be verified on supported hardware.
 
 This fork is based on [Ajatt-Tools/videoclip](https://github.com/Ajatt-Tools/videoclip). See [LICENSE](LICENSE) for license terms.
 

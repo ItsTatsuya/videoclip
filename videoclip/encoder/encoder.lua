@@ -75,6 +75,7 @@ local function make_encoder()
         timings = nil,
         mpv = nil,
         ffmpeg = nil,
+        detected_encoders = {},
     }
     local pub = {}
 
@@ -217,17 +218,33 @@ local function make_encoder()
             args = backend.mkargs_audio(output_file_path)
         end
 
-        -- Build the retry now: later callbacks must not read changed playback state.
-        local cpu_args
-        if clip_type == 'video' and this.config.video_codec == 'h264_nvenc' and not this.config.copy_streams then
+        -- Snapshot all retry arguments before playback or preferences can change.
+        local attempts = { { args = args, encoder = this.config.video_encoder } }
+        local selected_encoder = this.config.video_encoder
+        if clip_type == 'video' and this.config.video_format == 'mp4'
+                and selected_encoder ~= 'cpu' and not this.config.copy_streams then
             local cfg_mgr = require('config.config')
-            this.config.video_encoder = 'cpu'
+            local candidates = { 'cpu' }
+            if selected_encoder == 'gpu' then
+                candidates = {}
+                local detected = this.detected_encoders[backend.name]
+                if detected then table.insert(candidates, detected) end
+                for _, vendor in ipairs({ 'nvenc', 'amf', 'qsv' }) do
+                    if vendor ~= detected then table.insert(candidates, vendor) end
+                end
+                table.insert(candidates, 'cpu')
+                attempts = {}
+            end
+            local ok, err = pcall(function()
+                for _, candidate in ipairs(candidates) do
+                    this.config.video_encoder = candidate
+                    cfg_mgr.set_encoding_settings(this.config)
+                    table.insert(attempts, { args = backend.mkargs_video(output_file_path), encoder = candidate })
+                end
+            end)
+            this.config.video_encoder = selected_encoder
             cfg_mgr.set_encoding_settings(this.config)
-            local ok, result = pcall(backend.mkargs_video, output_file_path)
-            this.config.video_encoder = 'nvenc'
-            cfg_mgr.set_encoding_settings(this.config)
-            if not ok then error(result) end
-            cpu_args = result
+            if not ok then error(err) end
         end
 
         mp.msg.info("Executing: %s", table.concat(h.quote_if_necessary(args), " "))
@@ -238,23 +255,31 @@ local function make_encoder()
             return
         end
 
-        local function run_with_args(encode_args, tried_cpu_fallback)
+        local function run_with_args(index)
+            local attempt = attempts[index]
             local process_result = function(_, ret, err)
-                if clip_result_failed(ret)
-                        and cpu_args
-                        and not tried_cpu_fallback then
-                    h.notify("NVENC failed, retrying with CPU…", "warn", 3)
-                    run_with_args(cpu_args, true)
+                if clip_result_failed(ret) and attempts[index + 1] then
+                    if selected_encoder == 'gpu' then this.detected_encoders[backend.name] = nil end
+                    local next_encoder = attempts[index + 1].encoder
+                    h.notify(next_encoder == 'cpu' and "GPU encoding unavailable, retrying with CPU…"
+                            or "Detecting available GPU encoder…", "warn", 3)
+                    run_with_args(index + 1)
                     return
+                end
+                if not clip_result_failed(ret) and selected_encoder == 'gpu'
+                        and clip_type == 'video' and not this.config.copy_streams
+                        and attempt.encoder ~= 'cpu' then
+                    this.detected_encoders[backend.name] = attempt.encoder
+                    mp.msg.info("Detected GPU encoder: " .. attempt.encoder)
                 end
                 stop_progress()
                 handle_clip_result(output_file_path, on_complete, ret, err)
             end
-            h.subprocess_async(encode_args, process_result)
+            h.subprocess_async(attempt.args, process_result)
         end
 
         start_progress(output_file_path)
-        run_with_args(args, false)
+        run_with_args(1)
         return true
     end
 

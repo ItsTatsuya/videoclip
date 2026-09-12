@@ -29,7 +29,10 @@ local allowed_presets = {
 
 local allowed_video_encoders = {
     cpu = true,
+    gpu = true,
     nvenc = true,
+    amf = true,
+    qsv = true,
 }
 
 local allowed_nvenc_presets = {
@@ -120,6 +123,9 @@ function this.read_config_file()
     --- Reads the config file and returns a new copy of the config dict.
     local config = defaults.get_default()
     mpopt.read_options(config, NAME)
+    if config.video_encoder == 'nvenc' or config.video_encoder == 'amf' or config.video_encoder == 'qsv' then
+        config.video_encoder = 'gpu'
+    end
     msg.info("Read config file: " .. NAME .. ".conf")
     return config
 end
@@ -171,8 +177,12 @@ function this.set_encoding_settings(config)
     ---    audio_format="opus" → audio_codec="libopus", audio_extension=".opus"
     ---    audio_format="mp3" → audio_codec="libmp3lame", audio_extension=".mp3"
     if config.video_format == 'mp4' then
-        if config.video_encoder == 'nvenc' then
+        if config.video_encoder == 'nvenc' or config.video_encoder == 'gpu' then
             config.video_codec = 'h264_nvenc'
+        elseif config.video_encoder == 'amf' then
+            config.video_codec = 'h264_amf'
+        elseif config.video_encoder == 'qsv' then
+            config.video_codec = 'h264_qsv'
         else
             config.video_codec = 'libx264'
         end
@@ -228,7 +238,7 @@ function this.validate_config(config)
         config.audio_format = 'opus'
     end
 
-    if config.video_encoder == 'nvenc' and config.video_format ~= 'mp4' then
+    if config.video_encoder ~= 'cpu' and config.video_format ~= 'mp4' then
         config.video_encoder = 'cpu'
     end
 
